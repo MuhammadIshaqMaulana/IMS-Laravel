@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\BahanMentahController;
 use App\Http\Controllers\ProdukJadiController;
 use App\Http\Controllers\DaftarBahanController;
-use App\Http\Controllers\TransaksiProduksiController;
+use App\Http\Controllers\TransaksiController; // Diubah dari TransaksiProduksiController
 
 /*
 |--------------------------------------------------------------------------
@@ -34,3 +34,5 @@ Route::resource('produk-jadi', ProdukJadiController::class);
 // Kita akan buat controller dan views-nya di langkah selanjutnya
 Route::resource('daftar-bahan', DaftarBahanController::class);
 
+// --- Modul 4: Transaksi (Resource Diubah) ---
+Route::resource('transaksi', TransaksiController::class); // Route resource dan Controller diubah menjadi 'transaksi'
