@@ -1,0 +1,4 @@
+Flask Note
+
+To run flask api file.py, just run: python file_name.py
+it will automatically run local server for the api

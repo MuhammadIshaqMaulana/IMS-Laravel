@@ -7,7 +7,7 @@
     <!-- Bootstrap CSS CDN -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" xintegrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <!-- Font Awesome (untuk ikon) -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLMDJ8Wn1s5v5k8X/K3+g6T2P1d5o3m2yS2G0u5T5z5M5i5t5j5g5L5O5g5g5w5j5s5k5i5m5l5n5o5p5q5r5s5t5u5v5w5x5y5z5A5B5C5D5E5F5G5H5I5J5K5L5M5N5O5P5Q5R5S5T5U5V5W5X5Y5Z" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLMDJ8Wn1s5v5k8X/K3+g6T2P1d5o3m2yS2G0u5T5z5M5i5t5j5g5L5O5g5g5w5j5s5k5i5m5l5n5o5p5q5r5s5t5u5v5w5x5y5z5A5B5C5D5E5F5G5H5I5J5K5K5L5M5N5O5P5Q5R5S5T5U5V5W5X5Y5Z" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <!-- Custom Style Sederhana -->
     <style>
         body {
@@ -64,6 +64,14 @@
                         <a class="nav-link {{ Route::currentRouteName() == 'transaksi.index' ? 'active fw-bold' : '' }}"
                            href="{{ route('transaksi.index') }}">
                            <i class="fas fa-cogs me-1"></i> Transaksi
+                        </a>
+                    </li>
+
+                    <!-- Navigasi API Python (BARU) -->
+                     <li class="nav-item">
+                        <a class="nav-link {{ Route::currentRouteName() == 'api-python.index' ? 'active fw-bold' : '' }}"
+                           href="{{ route('api-python.index') }}">
+                           <i class="fas fa-terminal me-1"></i> Uji API Python
                         </a>
                     </li>
                 </ul>

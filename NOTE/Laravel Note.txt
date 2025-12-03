@@ -1,0 +1,99 @@
+php artisan make:model Barang -m
+php artisan make:model Pesanan -m
+php artisan make:model PesananDetail -m
+(bikin model + langsung migrasi)
+
+php artisan migrate:reset
+menghapus isi tabel migration dan semua tabel. Lalu jalankan kembali 
+php artisan migrate
+• php artisan migrate:refresh
+menghapus semua tabel, dan langsung membuatnya kembali
+• php artisan migrate:rollback --step=1
+mengembalikan 1 file migration terakhir
+
+Requirement = NodeJS
+
+
+salah satu cara comment banyak2 di blade = /* */
+
+code masih terbaca walaupun sudah commented : 
+It is because your html comment contains {{ }} & {!! !!} which will interpret by blade.
+In this case use Laravel blade comment. Add the comment between {{-- --}}
+
+
+
+
+
+
+
+
+
+
+
+barang_id dan pesanan_id pake integer, karena mereka adalah ID yang berelasi
+relasi dibuat di model menggunakan function
+   public function pesanan(){ // 1 user hasMany pesanan
+        return $this->hasMany('App\Pesanan','user_id', 'id');
+    }
+   public function user(){ // 1 user hasMany pesanan
+        return $this->belongsTo('App\User', 'user_id', 'id');
+    }
+
+cara membuat laman login = php artisan make:auth(laravel ver 5.2 kebawah)
+	composer require laravel/ui --dev
+	php artisan ui vue --auth
+
+
+You can change vue with react or bootstrap if you use React or Bootstrap in your project (see Using React).
+And then you need to perform the migrations and compile the frontend
+	php artisan migrate
+	npm install && npm run build (harus install node.js dlu)
+
+run pake nodejs = npm run dev
+jangan lupa urus env dlu
+
+composer require laravel/breeze --dev
+php artisan breeze:install
+
+php artisan migrate
+npm install
+npm run dev
+
+liat dokumentasi breeze
+
+
+laravel sedari awal sudah ngasih migration user, jadi tinggal dilengkapin aj(alamat dan noHp)
+alamat dan noHP nullable biar user cukup pake nama dan email dlu buat register. nanti setelah daftar boleh dilengkapin
+
+Cara ubah login pake username instead of email
+https://www.youtube.com/watch?v=y0HBjmS4Kho
+https://dev.to/shanisingh03/how-to-login-with-username-instead-of-email-in-laravel--hj8
+
+seluruh css taruh di folder PUBLIC
+
+Cara ctrl click laravel
+https://stackoverflow.com/questions/55702015/trying-to-go-to-a-file-inside-code-by-clicking-in-laravel-vs-code
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+saat mengikuti tutorial multiauth :
+Admin -> Siswa
+login_form
+owner -> owner
+dashboard -> dashboard -> beranda
+
+siswafactory dan siswaseeder = ga terlalu perlu, karena mereka cuma dipake untuk ngisi database dengan datadummy
+
+tutor multi auth breeze + dd $request all untuk nampilin data pas login :
+https://www.youtube.com/watch?v=R6ip2mhk8eU
