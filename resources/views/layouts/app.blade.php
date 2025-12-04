@@ -7,7 +7,7 @@
     <!-- Bootstrap CSS CDN -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" xintegrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <!-- Font Awesome (untuk ikon) -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLMDJ8Wn1s5v5k8X/K3+g6T2P1d5o3m2yS2G0u5T5z5M5i5t5j5g5L5O5g5g5w5j5s5k5i5m5l5n5o5p5q5r5s5t5u5v5w5x5y5z5A5B5C5D5E5F5G5H5I5J5K5K5L5M5N5O5P5Q5R5S5T5U5V5W5X5Y5Z" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLMDJ8Wn1s5v5k8X/K3+g6T2P1d5o3m2yS2G0u5T5z5M5i5t5j5g5L5O5g5g5w5j5s5k5i5m5l5n5o5p5q5r5s5t5u5v5w5x5y5z5A5B5C5D5E5F5G5H5I5J5K5L5M5N5O5P5Q5R5S5T5U5V5W5X5Y5Z" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <!-- Custom Style Sederhana -->
     <style>
         body {
@@ -33,6 +33,7 @@
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
+                @auth
                 <ul class="navbar-nav me-auto">
 
                     <!-- Navigasi Bahan Mentah -->
@@ -67,7 +68,7 @@
                         </a>
                     </li>
 
-                    <!-- Navigasi API Python (BARU) -->
+                    <!-- Navigasi API Python -->
                      <li class="nav-item">
                         <a class="nav-link {{ Route::currentRouteName() == 'api-python.index' ? 'active fw-bold' : '' }}"
                            href="{{ route('api-python.index') }}">
@@ -75,16 +76,42 @@
                         </a>
                     </li>
                 </ul>
+
+                <!-- Tombol Logout -->
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-user-circle me-1"></i> {{ Auth::user()->name }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                            <li>
+                                <form action="{{ route('logout') }}" method="POST">
+                                    @csrf
+                                    <button type="submit" class="dropdown-item">
+                                        <i class="fas fa-sign-out-alt me-1"></i> Logout
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+                @endauth
             </div>
         </div>
     </nav>
 
     <main class="py-4">
         <div class="container">
-            <!-- Pesan Sukses Global (Jika ada) -->
+            <!-- Pesan Sukses/Error Global -->
             @if(session('success'))
                 <div class="alert alert-success alert-dismissible fade show" role="alert">
                     {{ session('success') }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            @endif
+             @if(session('error'))
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    {{ session('error') }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
             @endif
