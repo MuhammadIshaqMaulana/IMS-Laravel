@@ -68,6 +68,14 @@
                         </a>
                     </li>
 
+                    <!-- Navigasi Laporan Stok Minimum (BARU) -->
+                     <li class="nav-item">
+                        <a class="nav-link {{ Route::currentRouteName() == 'laporan.stok-minimum' ? 'active fw-bold' : '' }}"
+                           href="{{ route('laporan.stok-minimum') }}">
+                           <i class="fas fa-bell me-1 text-danger"></i> Stok Kritis
+                        </a>
+                    </li>
+
                     <!-- Navigasi API Python -->
                      <li class="nav-item">
                         <a class="nav-link {{ Route::currentRouteName() == 'api-python.index' ? 'active fw-bold' : '' }}"

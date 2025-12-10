@@ -1,0 +1,11 @@
+AUTHENTIKASI
+1. saya coba akses melalui link http://127.0.0.1:8000/, page terbuka seperti biasa dengan kondisi saya belum login. Saya coba login menggunakan akun google yang terdaftar, lalu login gagal dan kena redirect ke localhost:8000 dengan kondisi masih belum login. Saya coba login dari localhost menggunakan akun google yang terdaftar, dan berhasil. Namun, ketika saya mengakses 127, page tersebut masih dalam kondisi belum login, saya kembali ke localhost dan saya masih dalam kondisi login. Jadi menurut saya localhost dan 127 walaupun mengakses base code sama, tapi loginnya beda. Lagian, Authorized JavaScript origins = http://localhost:8000 dan Authorized redirect URIs = http://localhost:8000/auth/google/callback. Jadi menurut saya, akan lebih baik ketika user berusaha mengakses 127, apapun itu subpage nya, redirect ke localhost. Lagian login dari 127 juga gak bisa.
+
+2. Saya coba perbaiki masalah no.1 dengan mengubah redirect to loginpage yang ada di bootstrap/app.php menjadi redirect ke halaman welcome. Namun, kesalahan (Unknown named parameter $redirectTo) terjadi karena versi Laravel yang Anda gunakan (meskipun modern, mungkin merupakan minor version yang lebih lama) tidak mengenali atau mendukung sintaks named parameter redirectTo: di dalam closure withRouting. Ini menyebabkan Fatal Error karena PHP/Laravel tidak tahu apa itu redirectTo.
+
+Solusi terbaik adalah menghapus sintaks yang menyebabkan fatal error dari bootstrap/app.php, dan mengatasi masalah redirect (Route [login] not defined) dengan cara tradisional di file routing (routes/web.php).
+
+3. Aku tidak perlu memasukkan user di google console agar dia bisa login. Semua akun google bisa login disitu. Pada aplikasi ini sekarang, cara dia menentukan orang itu admin atau bukan adalah dengan melihat di .env ADMIN_EMAILS=lanakeren20@gmail.com
+
+UI FRONT END
+4. 

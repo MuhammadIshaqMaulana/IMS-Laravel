@@ -1,0 +1,30 @@
+Jadi saya ingin secara bertahap mengubah aplikasi IMS roti ini menjadi aplikasi IMS yang simple dan universal seperti Sortly. Saya benar-benar ingin aplikasinya secara bertahap kita buat aplikasi IMS ini memiliki fitur selengkap dan sesimple Sortly.
+
+Hal yang ku perhatiakan dari Sortly:
+1. tidak ada vendor, jadi kita benar-benar fokus mengurus barang kita
+2. Sortly menampilkan item-item bukan dalam bentuk tabel
+
+saya ingin agar semua tombol navigasi dipindahkan dari atas ke kiri, agar lebih terlihat seperti sortly. saya juga ingin warna background navigasi adalah #895129 dengan text navigasi berwarna putih. Saya juga ingin agar navigasi akun dipindahkan ke bawah kiri. Saya juga ingin agar judul aplikasi ini diubah dari '🥖 IMS Toko Roti' jadi 'My IMS' agar lebih singkat dan logo utamanya adalah 🥖. Saya juga ingin agar kamu menambahkan view 'dashboard' yang berisi:
+
+1. Inventory summary
+
+- Items total
+
+- Folder total
+
+- Total quantity
+
+- Total value
+
+2. Items that need restocking
+
+
+3. Recent Activity
+
+- Berisi bar-bar activity history dengan format (nama actor) (action) (object of action) (adverb). Contoh: Ishaq Maulana membuat folder 'Sepatu futsal' di 'sepatu'
+
+Saya juga ingin agar ketika user menekan logo atau judul aplikasi di navigation bar, maka akan dialihkan ke dashboard
+
+nambah kolom tidak expisit untuk 1 tujuan. Bualah tebal 
+
+- saya juga ingin agar data bisa export import
