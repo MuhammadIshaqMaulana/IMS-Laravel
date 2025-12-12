@@ -10,7 +10,7 @@ class DaftarBahan extends Model
     use HasFactory;
 
     // Nama tabel pivot
-    protected $table = 'daftar_bahan';
+    protected $table = 'daftar_bahans';
 
     protected $fillable = [
         'produk_jadi_id',

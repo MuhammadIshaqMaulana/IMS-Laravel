@@ -17,7 +17,7 @@ return new class extends Migration
 
             // Kunci Asing ke Produk yang diproduksi
             $table->foreignId('produk_jadi_id')
-                  ->constrained('produk_jadi')
+                  ->constrained('produk_jadis')
                   ->onUpdate('cascade')
                   ->onDelete('restrict');
 

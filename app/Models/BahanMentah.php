@@ -10,7 +10,7 @@ class BahanMentah extends Model
     use HasFactory;
 
     // Definisikan nama tabel secara eksplisit (jika tidak mengikuti konvensi jamak bahasa Inggris)
-    protected $table = 'bahan_mentah';
+    protected $table = 'bahan_mentahs';
 
     // Kolom yang aman untuk mass assignment
     protected $fillable = [

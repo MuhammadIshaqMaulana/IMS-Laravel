@@ -93,7 +93,8 @@ Cara ctrl click laravel
 https://stackoverflow.com/questions/55702015/trying-to-go-to-a-file-inside-code-by-clicking-in-laravel-vs-code
 
 
-
+rollback: 
+php artisan migrate:rollback --step=1
 
 
 

@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('produk_jadi', function (Blueprint $table) {
+        Schema::create('produk_jadis', function (Blueprint $table) {
             $table->id(); // Kunci Utama (id)
             $table->string('nama', 100)->unique();
             $table->string('sku', 50)->unique();
@@ -29,6 +29,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('produk_jadi');
+        Schema::dropIfExists('produk_jadis');
     }
 };

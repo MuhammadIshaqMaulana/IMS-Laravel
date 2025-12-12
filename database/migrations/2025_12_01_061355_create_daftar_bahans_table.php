@@ -11,18 +11,18 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('daftar_bahan', function (Blueprint $table) {
+        Schema::create('daftar_bahans', function (Blueprint $table) {
             $table->id();
 
             // Kunci Asing 1: Menghubungkan ke produk_jadi
             $table->foreignId('produk_jadi_id')
-                  ->constrained('produk_jadi') // Merujuk ke tabel 'produk_jadi'
+                  ->constrained('produk_jadis') // Merujuk ke tabel 'produk_jadi'
                   ->onUpdate('cascade')
                   ->onDelete('cascade');
 
             // Kunci Asing 2: Menghubungkan ke bahan_mentah
             $table->foreignId('bahan_mentah_id')
-                  ->constrained('bahan_mentah') // Merujuk ke tabel 'bahan_mentah'
+                  ->constrained('bahan_mentahs') // Merujuk ke tabel 'bahan_mentah'
                   ->onUpdate('cascade')
                   ->onDelete('cascade');
 
@@ -41,6 +41,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('daftar_bahan');
+        Schema::dropIfExists('daftar_bahans');
     }
 };
