@@ -11,10 +11,10 @@
 
         <div class="card text-center shadow p-4">
             <h1 class="card-title display-4 text-primary">
-                Selamat Datang di 🥖 IMS Toko Roti
+                Selamat Datang di 🥖 My IMS
             </h1>
             <p class="card-text lead">
-                Sistem Manajemen Inventaris Manufaktur Roti Anda.
+                Sistem Manajemen Inventaris Manufaktur Universal.
             </p>
             <hr class="my-4">
 
@@ -23,6 +23,7 @@
                     Akses ke sistem memerlukan otentikasi Admin.
                 </p>
                 <div class="d-grid gap-2 col-6 mx-auto">
+                    <!-- Tombol Login (menuju Google Auth Controller) -->
                     <a href="{{ route('login.google') }}" class="btn btn-danger btn-lg">
                         <i class="fab fa-google me-2"></i> Login dengan Google (Admin)
                     </a>
@@ -32,7 +33,8 @@
                     Anda sudah login sebagai **{{ Auth::user()->name }}**.
                 </p>
                 <div class="d-grid gap-2 col-6 mx-auto">
-                    <a href="{{ route('bahan-mentah.index') }}" class="btn btn-success btn-lg">
+                    <!-- Tombol Akses Dashboard (jika sudah login) -->
+                    <a href="{{ route('dashboard') }}" class="btn btn-success btn-lg">
                         <i class="fas fa-home me-2"></i> Akses Dashboard
                     </a>
                 </div>

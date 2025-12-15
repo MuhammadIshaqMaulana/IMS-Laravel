@@ -28,48 +28,52 @@ class GoogleAuthController extends Controller
         try {
             // Ambil data pengguna dari Google
             $googleUser = Socialite::driver('google')->user();
-
-            // Ambil daftar email admin dari .env dan bersihkan dari spasi
-            $adminEmails = array_map('trim', explode(',', env('ADMIN_EMAILS', '')));
             $userEmail = $googleUser->getEmail();
 
-            // --- LOGIKA OTORISASI ADMIN ---
+            // Ambil daftar email admin dari .env dan bersihkan dari spasi (Untuk cek awal)
+            $adminEmailsFromEnv = array_map('trim', explode(',', env('ADMIN_EMAILS', '')));
 
-            // 1. Cek apakah email pengguna ada di daftar ADMIN_EMAILS
-            $isAdmin = in_array($userEmail, $adminEmails);
-
-            if (!$isAdmin) {
-                // Jika bukan admin, tolak login
-                return redirect()->route('home')->with('error', 'Akses ditolak. Email Anda tidak terdaftar sebagai admin IMS.');
-            }
-
-            // 2. Cari user berdasarkan google_id atau email
+            // 1. Cari user berdasarkan google_id atau email
             $user = User::where('google_id', $googleUser->getId())
                         ->orWhere('email', $userEmail)
                         ->first();
 
-            if ($user) {
-                // User sudah ada (Login atau link akun)
-                $user->update([
-                    'google_id' => $googleUser->getId(),
-                    'is_admin' => $isAdmin, // Perbarui status admin (tetap True jika sudah lolos cek)
-                ]);
-            } else {
-                // User baru (hanya terjadi jika email lolos cek admin)
+            // LOGIKA OTORISASI DAN PENDAFTARAN
+            if (!$user) {
+                // KASUS 1: USER BARU. Cek apakah user ada di daftar ADMIN_EMAILS di .env
+                $isNewAdmin = in_array($userEmail, $adminEmailsFromEnv);
+
+                if (!$isNewAdmin) {
+                    // Jika user baru tidak ada di daftar .env, TOLAK LOGIN.
+                    return redirect()->route('home')->with('error', 'Akses ditolak. Email Anda tidak terdaftar sebagai admin IMS.');
+                }
+
+                // Buat user baru dan set sebagai admin
                 $user = User::create([
                     'name' => $googleUser->getName(),
                     'email' => $userEmail,
                     'google_id' => $googleUser->getId(),
                     'password' => Hash::make(Str::random(16)), // Password acak
-                    'is_admin' => true, // Secara eksplisit set true karena lolos validasi
+                    'is_admin' => true, // SET PERAN ADMIN DI SINI
                 ]);
+            } else {
+                // KASUS 2: USER LAMA. Update detail jika diperlukan.
+                $user->update([
+                    'google_id' => $googleUser->getId(),
+                    // Status is_admin tidak diubah karena sudah diatur di login pertama
+                ]);
+
+                // Pengecekan keamanan tambahan: pastikan user lama adalah admin
+                if (!$user->is_admin) {
+                     return redirect()->route('home')->with('error', 'Akses ditolak. Akun Anda bukan admin IMS.');
+                }
             }
 
             // 3. Login pengguna
             Auth::login($user);
 
-            // Redirect ke halaman yang aman (daftar bahan mentah)
-            return redirect()->route('bahan-mentah.index')
+            // Redirect ke Dashboard setelah login sukses
+            return redirect()->route('dashboard')
                              ->with('success', 'Selamat datang Admin, Anda berhasil login via Google.');
 
         } catch (\Exception $e) {

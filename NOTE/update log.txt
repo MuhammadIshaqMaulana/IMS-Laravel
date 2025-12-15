@@ -1,30 +1,64 @@
-Jadi saya ingin secara bertahap mengubah aplikasi IMS roti ini menjadi aplikasi IMS yang simple dan universal seperti Sortly. Saya benar-benar ingin aplikasinya secara bertahap kita buat aplikasi IMS ini memiliki fitur selengkap dan sesimple Sortly.
+Saya ingin aplikasinya secara bertahap kita buat aplikasi IMS ini memiliki fitur universal dan sesimple Sortly.
 
-Hal yang ku perhatiakan dari Sortly:
-1. tidak ada vendor, jadi kita benar-benar fokus mengurus barang kita
-2. Sortly menampilkan item-item bukan dalam bentuk tabel
+Jadi kalau saya mau mengikuti sortly dengan segala fitur simple dan dinamisnya, seperti membuat beragam item, dengan berbagai tag dan custom fieldnya masing2(boolean), sistem folder yang sama persis seperti kita mengatur file folder. Sepertinya custom field dan tag tidak terlalu beeda fungisnya. karena sepertinya tipenya boolean dan berfungsi untuk menambah atribut pada item/file.
 
-saya ingin agar semua tombol navigasi dipindahkan dari atas ke kiri, agar lebih terlihat seperti sortly. saya juga ingin warna background navigasi adalah #895129 dengan text navigasi berwarna putih. Saya juga ingin agar navigasi akun dipindahkan ke bawah kiri. Saya juga ingin agar judul aplikasi ini diubah dari '🥖 IMS Toko Roti' jadi 'My IMS' agar lebih singkat dan logo utamanya adalah 🥖. Saya juga ingin agar kamu menambahkan view 'dashboard' yang berisi:
+Karena sepertinya refactor ini akan cukup lama, jadi saya ingin kamu agar sekarang fokus buatkan fase-fase untuk refactor ini, mulai dari perencanaan, perombakan database, logika, UI, hingga selesai. tidak masalah faseya banyak karena yang penting 1 fase tuh jangan terlalu padat, karena saya juga akan push ke git untuk setiap fase.
+SKU otomatis.
 
-1. Inventory summary
-
-- Items total
-
-- Folder total
-
-- Total quantity
-
-- Total value
-
-2. Items that need restocking
+Berikut lanjutan nomor 5 pada chat sebelumnya:
+5. default fieldnya adalah:
+- name
+- quantity
+- unit of measure
+- min. level
+- price
+- tags 
+- notes
+- option 'this item has variant' (ini memunculkan input agar user bisa input varian)(setelah dibuat, setiap varian item akn menjadi item individu masing-masing)
 
 
-3. Recent Activity
+6. kemampuan untuk memilih multiple item, baik memilih 1 per 1, semuanya, atau berdasarkan filter. Kemampuan ini digunakan untuk:
+- bulk edit
+	- name(add/replace, Add prefix/suffix, sequential number prefix/suffix)
+	- min. level(stok minimum)(add/replace)
+	- Price(add/replace, increment, decrement, multiply, divide)(karena price tidak boleh desimal, jadi bulatkan saja keatas/kebawah dan berikan keterangakan di UI itu dibulatkan keatas atau kebawah)
+	- notes(add/replace, Add prefix/suffix, sequential number prefix/suffix)
+	- tags(add/remove)
+	- custom fields
+	
+* Walaupun diberi kebebasan untuk mengedit, tapi sortly tetap ketat dalam membatasi input. Seperti mencegah user mengalikan harga sampai out of max input.
+Saya juga ingin agar aplikasi ini tetap berbahasa indonesia.
 
-- Berisi bar-bar activity history dengan format (nama actor) (action) (object of action) (adverb). Contoh: Ishaq Maulana membuat folder 'Sepatu futsal' di 'sepatu'
 
-Saya juga ingin agar ketika user menekan logo atau judul aplikasi di navigation bar, maka akan dialihkan ke dashboard
 
-nambah kolom tidak expisit untuk 1 tujuan. Bualah tebal 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 - saya juga ingin agar data bisa export import

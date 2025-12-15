@@ -1,1 +1,6 @@
 Saya perhatikan Sortly memiliki tampilan yang lebih simple dan user firendly. Jadi, saya akan mengikuti  Sortly. Saya juga sudah membuat navigasi di kiri dan 
+
+
+
+
+- Perbaiki database
