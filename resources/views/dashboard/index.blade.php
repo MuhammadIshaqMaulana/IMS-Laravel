@@ -23,7 +23,7 @@
         <div class="card bg-info text-white shadow-sm">
             <div class="card-body">
                 <i class="fas fa-calculator fa-2x float-end"></i>
-                <h5 class="card-title">Total Kuantitas</h5>
+                <h5 class="card-title">Total Kuantitas (Material)</h5>
                 <p class="card-text h3">{{ number_format($totalQuantity, 2) }} Unit</p>
             </div>
         </div>
@@ -33,7 +33,7 @@
         <div class="card bg-success text-white shadow-sm">
             <div class="card-body">
                 <i class="fas fa-dollar-sign fa-2x float-end"></i>
-                <h5 class="card-title">Total Nilai (Produk)</h5>
+                <h5 class="card-title">Total Nilai (Inventaris)</h5>
                 <p class="card-text h3">Rp{{ number_format($totalValue, 0, ',', '.') }}</p>
             </div>
         </div>
@@ -43,9 +43,10 @@
         <div class="card bg-secondary text-white shadow-sm">
             <div class="card-body">
                 <i class="fas fa-folder fa-2x float-end"></i>
-                <h5 class="card-title">Folder Total</h5>
-                <p class="card-text h3">0</p>
-                <small>(Fitur folder belum diimplementasikan)</small>
+                <h5 class="card-title">BOM/Kit Total</h5>
+                <!-- DIUBAH: Menampilkan total BOM/Kit -->
+                <p class="card-text h3">{{ $totalFolders }}</p>
+                <small>(Dianggap sebagai Item yang memiliki Material)</small>
             </div>
         </div>
     </div>
@@ -59,7 +60,7 @@
             <div class="card-body">
                 @if($itemsKritis->isEmpty())
                     <div class="alert alert-success text-center">
-                        Semua stok bahan Anda berada di atas batas minimum.
+                        Semua stok material Anda berada di atas batas minimum.
                     </div>
                 @else
                     <ul class="list-group list-group-flush">
@@ -82,7 +83,7 @@
     <div class="col-md-6 mb-4">
         <div class="card shadow h-100">
             <div class="card-header bg-dark text-white">
-                <i class="fas fa-history me-2"></i> Aktivitas Terbaru (Produksi)
+                <i class="fas fa-history me-2"></i> Aktivitas Terbaru (Produksi/Perakitan)
             </div>
             <div class="card-body">
                  <ul class="list-group list-group-flush">
@@ -90,13 +91,13 @@
                     <li class="list-group-item">
                         <small class="text-muted">{{ $activity->created_at->diffForHumans() }}</small><br>
                         <strong>{{ Auth::user()->name }}</strong>
-                        <span class="text-success">memproduksi</span>
+                        <span class="text-success">merakit</span>
                         <strong>{{ number_format($activity->jumlah_produksi, 0) }} unit</strong>
-                        produk
-                        <span class="text-primary">{{ $activity->produkJadi->nama ?? 'Produk Dihapus' }}</span>.
+                        Item
+                        <span class="text-primary">{{ $activity->itemProduksi->nama ?? 'Item Dihapus' }}</span>.
                     </li>
                     @empty
-                        <div class="alert alert-info text-center">Belum ada transaksi produksi yang dicatat.</div>
+                        <div class="alert alert-info text-center">Belum ada transaksi produksi/perakitan yang dicatat.</div>
                     @endforelse
                 </ul>
             </div>

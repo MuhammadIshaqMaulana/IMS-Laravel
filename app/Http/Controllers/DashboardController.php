@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Item; // Diubah dari BahanMentah/ProdukJadi
+use App\Models\Item;
 use App\Models\Transaksi;
 use Illuminate\Support\Facades\DB;
 
@@ -13,22 +13,26 @@ class DashboardController extends Controller
         // 1. Inventory Summary
 
         $totalItems = Item::count();
-        $totalQuantity = Item::sum('stok_saat_ini');
+        // Total Kuantitas hanya dihitung dari Item non-BOM (Material/Aset)
+        $totalQuantity = Item::whereNull('materials')->sum('stok_saat_ini');
 
-        // Total value: Stok Produk Jadi * Harga Jual (Harga Jual kini ada di Model Item)
-        $totalValue = Item::where('jenis_item', 'produk_jadi')
-                          ->sum(DB::raw('stok_saat_ini * harga_jual'));
+        // Total value: Total Value dihitung dari semua Item (Harga jual x Stok saat ini)
+        $totalValue = Item::sum(DB::raw('stok_saat_ini * harga_jual'));
 
         // 2. Items that need restocking (Stok Kritis)
-        $itemsKritis = Item::where('jenis_item', 'bahan_mentah')
+        // Item yang bukan BOM (Material/Aset)
+        $itemsKritis = Item::whereNull('materials')
                                   ->whereColumn('stok_saat_ini', '<=', 'stok_minimum')
                                   ->orderBy('nama', 'asc')
-                                  ->take(5) // Ambil 5 item teratas
+                                  ->take(5)
                                   ->get();
 
-        // 3. Recent Activity (Ambil 10 transaksi terakhir)
-        // Transaksi Model belum diubah relasinya, jadi kita biarkan dulu.
-        $recentActivity = Transaksi::with('produkJadi') // Catatan: Relasi ini perlu diubah di Model Transaksi di fase selanjutnya
+        // 3. Folder Total (sementara dihitung dari Item yang memiliki materials, sebagai proxy untuk BOM)
+        // Nanti akan dihitung dari Item yang punya tag 'folder'
+        $totalFolders = Item::whereNotNull('materials')->count(); // Estimasi
+
+        // 4. Recent Activity
+        $recentActivity = Transaksi::with('itemProduksi')
                                     ->orderBy('tanggal_produksi', 'desc')
                                     ->take(10)
                                     ->get();
@@ -38,6 +42,7 @@ class DashboardController extends Controller
             'totalQuantity',
             'totalValue',
             'itemsKritis',
+            'totalFolders',
             'recentActivity'
         ));
     }

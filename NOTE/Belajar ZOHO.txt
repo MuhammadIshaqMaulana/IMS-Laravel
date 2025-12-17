@@ -4,3 +4,112 @@ Saya perhatikan Sortly memiliki tampilan yang lebih simple dan user firendly. Ja
 
 
 - Perbaiki database
+
+
+
+Value Proposition:
+- Integrated BOM
+- bahan alternatif BOM, misal ram 2gb asus 2pcs, ram 2gb vgen 2pcs. Berarti RAM 2gb yang siap dipakai untuk jadi bahan PC itu adalah 4gb. Kecuali user maunya harus ram 2gb merk asus, bisa juga
+
+- aku juga pengen biar pas user input ram 2gb omicron 5pcs, bahan RAM 2gb untuk BOM PC itu nambah jadi 9pcs 
+jadi, ada tombol "auto add alternatif item when new item with same tag as chosen tag is added to inventory" di UI edit bom, ini gak usah diimplementasi di Ui create bom, nanti makin rame UI create bom.
+
+
+
+
+
+
+
+gue mau ngasih pemikiran gue soal ubah logika, loe coba nilai bro bagus gak pemikiran gue.
+
+Kayaknya fitur jenis_item di tabel items tuh gak perlu deh, karena toko ritel gak pake itu. Toh kalo toko manufaktur yang pake, mereka bakal langsung tahu kalo itu bahan dengan melihat bahwa item 'gula' itu masuk ke BOM kue. mereka juga bisa pakai tag misalnya 'bahan kue' kalo mau. 
+Terus misal yang pake IMS ini adalah toko komputer. item kayak ram, monitor, TV, speaker, itu menurutku kurang cocok disebut bahan mentah karena mereka bisa berdiri sendiri, tapi bisa aja user buat BOM 'Komputer' dengan bahan-bahan yang gue sebutin tadi. Gue juga pengen biar user bisa bebas misalkan mau buat BOM: 
+- PC essential: Monitor, PC
+- PC lengkap: Monitor, PC, Speaker, Webcam, Keyboard, mouse
+
+Jadi, aku pengen daftar_bahans tuh dihapus, lalu buat tabel baru 'bom' yang berfungsi sebagai BOM. BOM itu sama kayak item, produk biasa, tapi yang membedakan bom dengan item adalah kolom 'material' (tipe data longtext seperti kolom tags untuk menyimpan array foreign key material2 yang dibutuhkan, sepertinya ide bagus). Jadi pas user input kue sebagai BOM, kue akan tersimpan di tabel bom. 
+
+Jadi nanti tampilan bom samakan aja dengan items, pakai card, paling tambahin aja bahan-bahan yang diperlukan di dalam card di bawah tags. Sepertinya treat BOM same as item seperti bisa memasukkan BOM ke folder juga ide bagus. Misal folder pegboard, berisi BOM pegboard (material: pegboard 50x50cm 2pcs, gantungan kail 5pcs, gantungan keranjang 10x5x5 2pcs) dan item double tape lebar 48mm dan diameter 12cm.
+
+Jadi intinya data bom itu sama kayak items, bedanya adalah lu bisa nambahin material yang dibutuhkan yang diambil dari items atau bahkan bom lain. Loe bisa atur gimana komposisinya misal ram 2gb = 2 pcs, monitor 1, SSD 2 pcs. Jadi nanti stok barang bom itu adalah hasil perhitungan berdasarkan material yang dibutuhkan dan stok material tersebut. Jadi sepertinya setiap perubahan stok materail dan komposisi akan mempengaruhi stok barang bom tersebut.
+
+Untuk input varian di item, tambahkan tombol + untuk nambah input varian. Misal user mau input varian ukuran dan warna, jadi user bakal input nama varian 'ukuran' dengan varian kecil, besar. Lalu user tekan tombol + untuk menambah varian lain, diisi dengan 'warna' dengan varian putih, biru. Ketika user selesai membuat item tersebut, maka akan ada 2x2 = 4 item yang dibuat, yaitu kecil
+
+
+
+
+Bisa juga UI bom di-merge ke items. Jadi di UI items nanti ada 3 tombol create: buat item, buat bom, dan buat folder.
+
+buat UI create bom, itu bakal sama kayak UI create item, paling bedanya adalah penambahan input 'tambah material' berupa dropdown semua item dan bom yang sudah dibuat dan user juga bisa search di dropdown itu serta ada tombol + untuk menambahkan material lagi. User juga bisa bikin varian, tapi kalo checkbox 'varian' dicentang, maka input material menghilang tapi isi inputnya masih disimpan karena mungkin user salah tekan checkbox varian itu. Jadi ketika centang varian dihilangkan, maka input material yang mungkin udah sempet diisi user akan dipulihkan. Input varian juga kalo sempet user isi, maka ketika user uncheck-check box varian, maka input varian sebelumnya akan dipulihkan.
+
+
+Coba cek lagi fase-fase rombakan IMS kita bro, bakal ada yang berubah gak karena pengubahan logika BOM ini.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+name: star crate ✨📦
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+aku masih bingun BOM itu apa? apakah contoh:
+- gandum 10kg
+- mentega 20kg
+- gula 50kg
+
+untuk membuat 1 kue, dibutuhkan gandum 2kg, mentega 3kg, dan gula 1kg. Berarti dengan jumlah bahan sekarang, kue yang kita bisa buat adalah 5 buah dengan sisa gandum 0kg, mentega 5kg, dan gula 45kg
+
+berarti dengan bahan sekarang, BOM kue = 5 pcs?
+
+atau semua bahan yang terkait dengan pembuatan kue disatukan kuantitasnya menjadi 80kg yang berarti BOM kue = 80kg?
+
+karena aku liat youtuber menjelaskan penmbuatan BOM menggunakan excel tentang BOM 'Computer setup':
+monitor 20pcs
+PC 80pcs
+
+berdasarkan fitur dan jumlahnya di atas, fitur BOM 'Computer setup' punya fitur total number = 100 pcs
+
+yang mana yang paling baik dan paling bener nih bro?
+
+
+
+
+
+
+sebenernya kita gak butuh tabel daftar_bahans gak sih bro? karena sekarang kita gak fokus buat IMS manufaktur. kita fokusnya biar aplikasi ini sesimple mungkin bahkan user baru yang punya bisnis ritel sederhana pun bisa pakai bro. Lagian juga sortly kayaknya gak punya fitur buat bikin BOM gitu. 
+
+
+
+
+

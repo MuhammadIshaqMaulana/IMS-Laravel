@@ -2,121 +2,122 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ProdukJadi;
-use App\Models\Transaksi; // DIUBAH: Menggunakan Model Transaksi yang baru
+use App\Models\Item;
+use App\Models\Transaksi;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class TransaksiController extends Controller
 {
     /**
-     * Menampilkan daftar semua transaksi produksi yang pernah dilakukan. (READ - Index)
+     * Menampilkan daftar semua transaksi produksi yang pernah dilakukan.
      */
     public function index()
     {
-        // Panggilan Model diubah ke Transaksi::
-        $transaksis = Transaksi::with('produkJadi')
+        $transaksis = Transaksi::with('itemProduksi')
                             ->orderBy('tanggal_produksi', 'desc')
                             ->paginate(15);
 
-        // Mengarahkan ke views/transaksi/index.blade.php
         return view('transaksi.index', compact('transaksis'));
     }
 
     /**
-     * Menampilkan formulir untuk mencatat transaksi produksi baru. (CREATE - Form)
+     * Menampilkan formulir untuk mencatat transaksi produksi baru.
      */
     public function create()
     {
-        // Ambil hanya produk yang memiliki resep (daftar bahan) yang terdefinisi
-        $produkJadi = ProdukJadi::whereHas('resep')->orderBy('nama')->get();
+        // Ambil hanya item yang DIANGGAP BOM (memiliki data di kolom materials)
+        $bomItems = Item::whereNotNull('materials')
+                        ->orderBy('nama')->get();
 
-        if ($produkJadi->isEmpty()) {
-            return redirect()->route('produk-jadi.index')
-                             ->with('warning', 'Anda harus memiliki setidaknya satu Produk Jadi dengan Resep (Daftar Bahan) yang terdefinisi sebelum mencatat produksi.');
+        if ($bomItems->isEmpty()) {
+            return redirect()->route('item.index')
+                             ->with('warning', 'Anda harus memiliki setidaknya satu Item (BOM/Kit) dengan material yang terdefinisi sebelum mencatat produksi/perakitan.');
         }
 
-        // Mengarahkan ke views/transaksi/create.blade.php
-        return view('transaksi.create', compact('produkJadi'));
+        return view('transaksi.create', compact('bomItems')); // Variabel diubah
     }
 
     /**
-     * Menyimpan transaksi produksi dan mengupdate stok. (CREATE - Store)
-     * Ini adalah LOGIKA INTI MANUFAKTUR, dilakukan dalam transaksi DB.
+     * Menyimpan transaksi produksi dan mengupdate stok (Logika Inti).
      */
     public function store(Request $request)
     {
         $validatedData = $request->validate([
-            'produk_jadi_id' => 'required|exists:produk_jadi,id',
+            'produk_jadi_id' => 'required|exists:items,id',
             'jumlah_produksi' => 'required|integer|min:1',
             'tanggal_produksi' => 'required|date',
             'catatan' => 'nullable|string|max:500',
         ]);
 
-        $produkId = $validatedData['produk_jadi_id'];
+        $itemId = $validatedData['produk_jadi_id'];
         $jumlahProduksi = $validatedData['jumlah_produksi'];
 
-        // Ambil produk dan resep (dengan bahan mentahnya)
-        $produk = ProdukJadi::with('resep.bahanMentah')->findOrFail($produkId);
-        $resep = $produk->resep;
+        // Mengambil Item (BOM/Kit)
+        $produk = Item::findOrFail($itemId);
 
-        if ($resep->isEmpty()) {
-            return redirect()->back()
+        // Validasi: Pastikan item ini memang BOM (memiliki materials)
+        $resepMaterials = $produk->materials;
+        if (empty($resepMaterials) || !is_array($resepMaterials)) {
+             return redirect()->back()
                              ->withInput()
-                             ->withErrors(['produk_jadi_id' => 'Produk ini tidak memiliki resep yang terdefinisi.']);
+                             ->withErrors(['produk_jadi_id' => 'Item yang dipilih bukan BOM (tidak memiliki material).']);
         }
 
-        // --- MULAI TRANSAKSI DATABASE (ATOMICITY) ---
         DB::beginTransaction();
 
         try {
-            // 1. Cek Ketersediaan Stok Bahan Mentah (Pemeriksaan Awal)
-            foreach ($resep as $itemResep) {
-                $bahan = $itemResep->bahanMentah;
-                $jumlahDibutuhkan = $itemResep->jumlah_digunakan * $jumlahProduksi;
+            // 1. Cek Ketersediaan Stok Bahan Mentah
+            // $resepMaterials kini adalah array seperti: [{'item_id': 1, 'qty': 2.0}, ...]
+            foreach ($resepMaterials as $material) {
+                $materialItemId = $material['item_id'];
+                $jumlahDibutuhkan = $material['qty'] * $jumlahProduksi;
 
-                // Cek stok
+                $bahan = Item::findOrFail($materialItemId);
+
                 if ($bahan->stok_saat_ini < $jumlahDibutuhkan) {
                     DB::rollBack();
                     return redirect()->back()
                                      ->withInput()
                                      ->withErrors([
-                                         'jumlah_produksi' => "Stok bahan mentah '{$bahan->nama}' tidak mencukupi. Dibutuhkan: {$jumlahDibutuhkan} {$bahan->satuan}, Tersedia: {$bahan->stok_saat_ini} {$bahan->satuan}."
+                                         'jumlah_produksi' => "Stok material '{$bahan->nama}' tidak mencukupi. Dibutuhkan: {$jumlahDibutuhkan} {$bahan->satuan}, Tersedia: {$bahan->stok_saat_ini} {$bahan->satuan}."
                                      ]);
                 }
             }
 
             // 2. Kurangi Stok Bahan Mentah
-            foreach ($resep as $itemResep) {
-                $bahan = $itemResep->bahanMentah;
-                $jumlahDibutuhkan = $itemResep->jumlah_digunakan * $jumlahProduksi;
+            foreach ($resepMaterials as $material) {
+                $bahan = Item::findOrFail($material['item_id']);
+                $jumlahDibutuhkan = $material['qty'] * $jumlahProduksi;
 
+                // Kurangi stok Item
                 $bahan->stok_saat_ini -= $jumlahDibutuhkan;
                 $bahan->save();
             }
 
             // 3. Tambahkan Stok Produk Jadi
-            $produk->stok_di_tangan += $jumlahProduksi;
+            $produk->stok_saat_ini += $jumlahProduksi;
             $produk->save();
 
-            // 4. Catat Transaksi Produksi
-            // Panggilan Model diubah ke Transaksi::
-            Transaksi::create($validatedData);
+            // 4. Catat Transaksi
+            Transaksi::create([
+                'produk_jadi_id' => $itemId,
+                'jumlah_produksi' => $jumlahProduksi,
+                'tanggal_produksi' => $validatedData['tanggal_produksi'],
+                'catatan' => $validatedData['catatan'],
+            ]);
 
-            // Jika semua berhasil, commit transaksi
             DB::commit();
 
             return redirect()->route('transaksi.index')
-                             ->with('success', "Produksi {$jumlahProduksi} unit '{$produk->nama}' berhasil dicatat. Stok bahan baku sudah disesuaikan.");
+                             ->with('success', "Perakitan/Produksi {$jumlahProduksi} unit '{$produk->nama}' berhasil dicatat. Stok material sudah disesuaikan.");
 
         } catch (\Exception $e) {
-            // Jika terjadi kesalahan, batalkan semua perubahan
             DB::rollBack();
             return redirect()->back()
-                             ->with('error', 'Terjadi kesalahan saat memproses transaksi produksi. Mohon coba lagi. Error: ' . $e->getMessage());
+                             ->with('error', 'Terjadi kesalahan saat memproses transaksi: ' . $e->getMessage());
         }
     }
-
     // Metode resource lainnya dinonaktifkan untuk Transaksi karena membatalkan histori tidak diizinkan.
     public function show() { abort(404); }
     public function edit() { abort(404); }

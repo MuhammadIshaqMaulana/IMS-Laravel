@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Item; // Diubah dari BahanMentah
+use App\Models\Item;
 use Illuminate\Http\Request;
 
 class LaporanController extends Controller
@@ -12,16 +12,17 @@ class LaporanController extends Controller
      */
     public function stokMinimum()
     {
-        // Query: Ambil Item di mana stok_saat_ini <= stok_minimum
-        // Kita hanya fokus pada Item yang ditandai sebagai 'bahan_mentah' untuk tujuan restock.
-        $bahanKritis = Item::where('jenis_item', 'bahan_mentah')
+        // Logika baru: Item adalah 'Bahan Mentah' jika kolom 'materials' kosong (bukan BOM/Kit)
+        // Kita hanya cek item yang bukan BOM dan stoknya di bawah batas.
+        $bahanKritis = Item::whereNull('materials')
                                   ->whereColumn('stok_saat_ini', '<=', 'stok_minimum')
                                   ->orderBy('nama', 'asc')
                                   ->get();
 
-        // Mengambil semua item Bahan Mentah untuk konteks
-        $totalBahan = Item::where('jenis_item', 'bahan_mentah')->count();
+        // Mengambil semua Item yang bukan BOM
+        $totalBahan = Item::whereNull('materials')->count();
 
+        // Catatan: Nama variabel $bahanKritis dan $totalBahan dipertahankan untuk Views.
         return view('laporan.stok_minimum', compact('bahanKritis', 'totalBahan'));
     }
 }

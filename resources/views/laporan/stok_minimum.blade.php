@@ -5,20 +5,20 @@
 @section('content')
 <div class="row">
     <div class="col-12">
-        <h1 class="mb-4 text-danger"><i class="fas fa-exclamation-triangle me-2"></i> Stok Bahan Mentah Kritis</h1>
-        <p class="lead">Daftar bahan yang stoknya berada di batas minimum atau di bawah batas minimum dan memerlukan pemesanan ulang (Reorder Point).</p>
+        <h1 class="mb-4 text-danger"><i class="fas fa-exclamation-triangle me-2"></i> Stok Item Kritis</h1>
+        <p class="lead">Daftar Item (Material/Aset) yang stoknya berada di batas minimum atau di bawah batas minimum dan memerlukan pemesanan ulang.</p>
     </div>
 
     @if ($bahanKritis->isEmpty())
         <div class="col-12">
             <div class="alert alert-success text-center mt-3">
-                <i class="fas fa-check-circle me-2"></i> Semua bahan mentah Anda berada di atas batas stok minimum!
+                <i class="fas fa-check-circle me-2"></i> Semua item Anda berada di atas batas stok minimum!
             </div>
         </div>
     @else
         <div class="col-12 mb-4">
             <div class="alert alert-warning">
-                Total **{{ $bahanKritis->count() }}** item berada pada atau di bawah batas kritis dari {{ $totalBahan }} total item bahan mentah.
+                Total **{{ $bahanKritis->count() }}** item berada pada atau di bawah batas kritis dari {{ $totalBahan }} total item material.
             </div>
         </div>
 
@@ -41,7 +41,8 @@
                     </div>
                     <hr>
                     <p class="mb-1"><strong>Pemasok:</strong> {{ $bahan->pemasok ?? 'Tidak Diketahui' }}</p>
-                    <a href="{{ route('bahan-mentah.edit', $bahan->id) }}" class="btn btn-sm btn-outline-danger mt-3 float-end">
+                    <!-- FIXED: Mengarah ke item.edit -->
+                    <a href="{{ route('item.edit', $bahan->id) }}" class="btn btn-sm btn-outline-danger mt-3 float-end">
                         <i class="fas fa-truck-loading me-1"></i> Pesan Ulang / Edit Data
                     </a>
                 </div>
