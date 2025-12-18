@@ -1,391 +1,190 @@
 @extends('layouts.app')
 
-@section('title', 'Daftar Semua Item')
+@section('title', $currentFolder ? $currentFolder->nama : 'Inventaris Utama')
 
 @section('content')
-<div class="row">
-    <div class="col-12">
-        <h1 class="mb-4">Daftar Semua Item ({{ $items->total() }})</h1>
-
-        <!-- Kontrol Aksi Massal (Bulk Action) -->
-        <div class="d-flex justify-content-between align-items-center mb-3 p-3 bg-white shadow-sm rounded">
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="selectAllItems">
-                <label class="form-check-label" for="selectAllItems">
-                    Pilih Semua Item
-                </label>
+<div class="h-100 d-flex flex-column">
+    <!-- Breadcrumbs & Header -->
+    <div class="mb-3">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-1">
+                <li class="breadcrumb-item"><a href="{{ route('item.index') }}" class="text-decoration-none">Root</a></li>
+                @if($currentFolder)
+                    <li class="breadcrumb-item active">{{ $currentFolder->nama }}</li>
+                @endif
+            </ol>
+        </nav>
+        <div class="d-flex justify-content-between align-items-center">
+            <h2 class="fw-bold m-0">{{ $currentFolder ? $currentFolder->nama : 'Inventaris' }}</h2>
+            <div class="btn-group shadow-sm">
+                <a href="{{ route('item.create') }}" class="btn btn-primary"><i class="fas fa-plus me-1"></i> Create</a>
             </div>
+        </div>
+    </div>
 
-            <!-- Tombol Aksi Massal (Akan ditampilkan saat ada item terpilih) -->
-            <div id="bulkActions" style="display: none;">
-                <span id="selectedCount" class="badge bg-secondary me-3">0 Item Terpilih</span>
-                <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#bulkEditModal">
-                    <i class="fas fa-edit me-1"></i> Edit Massal
-                </button>
+    <!-- Bulk Action Toolbar -->
+    <div id="bulkActions" class="bg-white p-2 mb-3 rounded shadow-sm border-start border-4 border-warning" style="display: none;">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="ps-2">
+                <span id="selectedCount" class="badge bg-dark">0 Selected</span>
             </div>
-
-
-
-
-
-
-
-            <div class="d-flex justify-content-between align-items-center mb-3 p-3 bg-white shadow-sm rounded">
-                <div class="form-check">
-                    <!-- ... (Checkbox Select All) ... -->
-                </div>
-
-                <!-- Tombol Aksi Massal (Akan ditampilkan saat ada item terpilih) -->
-                <div id="bulkActions" style="display: none;">
-                    <span id="selectedCount" class="badge bg-secondary me-3">0 Item Terpilih</span>
-                    <button type="button" class="btn btn-warning me-2" data-bs-toggle="modal" data-bs-target="#bulkEditModal">
-                        <i class="fas fa-edit me-1"></i> Edit Massal
-                    </button>
-                </div>
-
-                <!-- Dropdown Ekspor (BARU) -->
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#bulkEditModal">Bulk Edit</button>
                 <div class="dropdown">
-                    <button class="btn btn-secondary dropdown-toggle" type="button" id="exportDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="fas fa-file-export me-1"></i> Ekspor
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="exportDropdown">
-                        <li><a class="dropdown-item" href="{{ route('item.export.csv') }}"><i class="fas fa-file-csv me-1"></i> Ekspor ke CSV</a></li>
-                        <li><a class="dropdown-item" href="{{ route('item.export.pdf') }}" target="_blank"><i class="fas fa-file-pdf me-1"></i> Ekspor ke PDF (Print)</a></li>
+                    <button class="btn btn-sm btn-secondary dropdown-toggle" data-bs-toggle="dropdown">Export</button>
+                    <ul class="dropdown-menu shadow">
+                        <li><a class="dropdown-item" href="{{ route('item.export.csv') }}">Export CSV</a></li>
+                        <li><a class="dropdown-item" href="{{ route('item.export.pdf') }}" target="_blank">Print PDF</a></li>
                     </ul>
                 </div>
-
-                <!-- Tombol Tambah Item -->
-                <a href="{{ route('item.create') }}" class="btn btn-primary ms-2">
-                    <i class="fas fa-plus"></i> Tambah Item Baru
-                </a>
             </div>
-
-
-
-
-
-
-
-
-            <!-- Tombol Tambah Item -->
-            <a href="{{ route('item.create') }}" class="btn btn-primary">
-                <i class="fas fa-plus"></i> Tambah Item Baru
-            </a>
         </div>
+    </div>
 
-        <div id="itemContainer" class="row">
-            @forelse ($items as $item)
-            <div class="col-lg-4 col-md-6 mb-4 item-card-wrapper" data-item-id="{{ $item->id }}">
-                <div class="card shadow-sm h-100">
-                    <div class="card-header d-flex justify-content-between align-items-center bg-light">
-                        <!-- Checkbox Seleksi Item Individu -->
-                        <div class="form-check">
-                            <input class="form-check-input item-checkbox" type="checkbox" data-item-id="{{ $item->id }}">
-                        </div>
+    <!-- Grid Layout Scrollable -->
+    <div class="row overflow-y-auto flex-grow-1 g-3">
+        @forelse($items as $item)
+        <div class="col-xl-3 col-lg-4 col-md-6">
+            <div class="card h-100 border-0 shadow-sm item-card position-relative" data-item-id="{{ $item->id }}">
+                <!-- Checkbox Overlay -->
+                <div class="position-absolute top-0 start-0 p-2 z-3">
+                    <input class="form-check-input item-checkbox shadow-none" type="checkbox" data-item-id="{{ $item->id }}">
+                </div>
 
-                        <!-- Penanda BOM -->
-                        @if ($item->materials)
-                           <span class="badge bg-primary"><i class="fas fa-puzzle-piece me-1"></i> BOM / KIT</span>
+                <!-- Clickable Content -->
+                <a href="{{ $item->is_folder ? route('item.index', ['folder_id' => $item->id]) : route('item.show', $item->id) }}"
+                   class="text-decoration-none text-dark h-100 d-flex flex-column">
+
+                    <div class="card-img-top bg-light d-flex align-items-center justify-content-center overflow-hidden" style="height: 140px;">
+                        @if($item->is_folder)
+                            <i class="fas fa-folder fa-4x text-warning opacity-75"></i>
                         @else
-                           <span class="badge bg-secondary">MATERIAL / ASSET</span>
-                        @endif
-                    </div>
-
-                    <div class="card-body">
-                        <!-- Image Placeholder (Nanti di Fase 11) -->
-                        <div class="text-center mb-3">
-                            <i class="fas fa-box" style="font-size: 3rem; color: #ccc;"></i>
-                        </div>
-
-                        <h5 class="card-title text-primary">{{ $item->nama }}</h5>
-
-                        <p class="card-text mb-1">
-                            <strong>SKU:</strong> <span class="text-muted">{{ $item->sku ?? '-' }}</span>
-                        </p>
-
-                        <p class="card-text mb-1">
-                            @if ($item->materials)
-                                <strong>Kapasitas Produksi:</strong>
-                                <span class="fw-bold text-success">{{ number_format($item->calculated_stock, 0) }} {{ $item->satuan }}</span>
-                                <small class="text-muted">(Stok Terhitung)</small>
+                            @if($item->image_link)
+                                <img src="{{ $item->image_link }}" class="w-100 h-100 object-fit-cover">
                             @else
-                                <strong>Stok Saat Ini:</strong>
-                                <span class="fw-bold text-success">{{ number_format($item->stok_saat_ini, 2) }} {{ $item->satuan }}</span>
+                                <i class="fas {{ $item->is_bom ? 'fa-layer-group' : 'fa-box' }} fa-3x text-secondary opacity-25"></i>
                             @endif
-                        </p>
+                        @endif
+                    </div>
 
-                        <p class="card-text mb-1">
-                            <strong>Min. Level:</strong>
-                            <span class="{{ $item->stok_saat_ini <= $item->stok_minimum && !$item->materials ? 'text-danger fw-bold' : 'text-secondary' }}">
-                                {{ number_format($item->stok_minimum, 2) }} {{ $item->satuan }}
-                            </span>
-                        </p>
-                        <p class="card-text mb-3">
-                             <strong>Harga:</strong> Rp{{ number_format($item->harga_jual, 0, ',', '.') }}
-                        </p>
-
-                        <!-- Tags (Contoh Display) -->
-                        @if ($item->tags)
-                            <div class="mb-2">
-                                @foreach($item->tags as $tag)
-                                    <span class="badge bg-primary text-white">{{ $tag }}</span>
-                                @endforeach
+                    <div class="card-body p-3">
+                        <h6 class="card-title text-truncate fw-bold mb-1">{{ $item->nama }}</h6>
+                        @if($item->is_folder)
+                            <small class="text-muted">{{ $item->itemsInFolder()->count() }} items inside</small>
+                        @else
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                    {{ number_format($item->calculated_stock, 0) }} {{ $item->satuan }}
+                                </span>
+                                <span class="fw-bold small">Rp{{ number_format($item->harga_jual, 0) }}</span>
                             </div>
                         @endif
-
-                        <!-- Custom Fields (Contoh Display) -->
-                        @if ($item->custom_fields)
-                            <div class="mb-2">
-                                @foreach($item->custom_fields as $key => $value)
-                                    <span class="badge bg-info text-dark">{{ $key }}</span>
-                                @endforeach
-                            </div>
-                        @endif
-
-                        <!-- Menampilkan Material/BOM di Card -->
-                        @if ($item->materials)
-                             <small class="d-block mt-3 text-muted">Material Penyusun ({{ count($item->materials) }} komponen)</small>
-                        @endif
-
                     </div>
-                    <div class="card-footer bg-white border-0 d-flex justify-content-end">
-                        <a href="{{ route('item.edit', $item->id) }}" class="btn btn-sm btn-outline-info me-1">Edit</a>
-                        <form action="{{ route('item.destroy', $item->id) }}" method="POST">
-                            @csrf
-                            @method('DELETE')
-                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Yakin menghapus item ini?')">Hapus</button>
-                        </form>
-                    </div>
+                </a>
+
+                <!-- Footer Actions -->
+                <div class="card-footer bg-white border-0 pt-0 pb-3 px-3 d-flex gap-2">
+                    <button class="btn btn-outline-light btn-sm flex-grow-1 text-dark border" onclick="openMoveModal({{ $item->id }}, '{{ $item->nama }}')">
+                        <i class="fas fa-folder-open"></i>
+                    </button>
+                    @if(!$item->is_folder)
+                    <button class="btn btn-outline-light btn-sm flex-grow-1 text-dark border" onclick="openQtyModal({{ $item->id }})">
+                        <i class="fas fa-plus-minus"></i>
+                    </button>
+                    @endif
                 </div>
             </div>
-            @empty
-            <div class="col-12">
-                <div class="alert alert-info text-center mt-3">Belum ada item terdaftar.</div>
-            </div>
-            @endforelse
         </div>
+        @empty
+        <div class="col-12 text-center py-5">
+            <div class="mb-3 opacity-25"><i class="fas fa-folder-open fa-5x"></i></div>
+            <h4 class="text-muted">Wah, foldernya kosong!</h4>
+            <p class="text-muted">Pindahkan item ke sini atau buat item baru.</p>
+        </div>
+        @endforelse
+    </div>
 
-        <div class="mt-4">
-            {{ $items->links() }}
-        </div>
+    <!-- Pagination -->
+    <div class="mt-3">
+        {{ $items->appends(request()->query())->links() }}
     </div>
 </div>
 
-<!-- Modal Edit Massal -->
-<div class="modal fade" id="bulkEditModal" tabindex="-1" aria-labelledby="bulkEditModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title" id="bulkEditModalLabel"><i class="fas fa-edit"></i> Edit Massal Inventaris</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<!-- Modal Update Qty Cepat -->
+<div class="modal fade" id="qtyModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <form id="qtyForm" method="POST">
+            @csrf
+            <div class="modal-content border-0 shadow">
+                <div class="modal-body p-4 text-center">
+                    <h5 class="mb-3">Update Quantity</h5>
+                    <input type="number" name="qty" class="form-control form-control-lg text-center mb-3" placeholder="Contoh: 10 atau -5" required>
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">Update Stok</button>
+                        <button type="button" class="btn btn-link text-muted btn-sm" data-bs-dismiss="modal">Batal</button>
+                    </div>
+                </div>
             </div>
-            <form id="bulkEditForm" action="{{ route('item.bulk-update') }}" method="POST">
-                @csrf
+        </form>
+    </div>
+</div>
+
+<!-- Modal Move Folder -->
+<div class="modal fade" id="moveModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <form id="moveForm" method="POST">
+            @csrf
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header"><h5>Pindahkan Item</h5></div>
                 <div class="modal-body">
-                    <p class="lead" id="modalSelectedCount">Mempersiapkan edit untuk <span class="fw-bold text-primary">0 item</span>.</p>
-
-                    <!-- Input tersembunyi untuk menyimpan ID item yang terpilih -->
-                    <input type="hidden" name="selected_items" id="selectedItemsInput">
-
-                    <div class="alert alert-info">
-                        **Perhatian:** Harga akan dibulatkan **ke bawah** jika hasilnya desimal (integer).
-                    </div>
-
-                    <!-- Tabs Navigasi untuk Berbagai Tipe Edit -->
-                    <ul class="nav nav-tabs" id="bulkEditTabs" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="name-tab" data-bs-toggle="tab" data-bs-target="#name-pane" type="button" role="tab" aria-controls="name-pane" aria-selected="true">Nama & SKU</button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="quantity-tab" data-bs-toggle="tab" data-bs-target="#quantity-pane" type="button" role="tab" aria-controls="quantity-pane" aria-selected="false">Level Min</button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="price-tab" data-bs-toggle="tab" data-bs-target="#price-pane" type="button" role="tab" aria-controls="price-pane" aria-selected="false">Harga & Nilai</button>
-                        </li>
-                         <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="tags-note-tab" data-bs-toggle="tab" data-bs-target="#tags-note-pane" type="button" role="tab" aria-controls="tags-note-pane" aria-selected="false">Tags & Catatan</button>
-                        </li>
-                    </ul>
-
-                    <div class="tab-content pt-3" id="bulkEditTabsContent">
-                        <!-- Pane 1: Nama & SKU -->
-                        <div class="tab-pane fade show active" id="name-pane" role="tabpanel" aria-labelledby="name-tab" tabindex="0">
-                            <div class="mb-3">
-                                <label for="name_action" class="form-label">Aksi Nama</label>
-                                <select class="form-select" name="name_action" id="name_action">
-                                    <option value="">-- Pilih Aksi --</option>
-                                    <option value="replace">Ganti dengan Teks Baru</option>
-                                    <option value="prefix">Tambah Awalan (Prefix)</option>
-                                    <option value="suffix">Tambah Akhiran (Suffix)</option>
-                                    <option value="seq_prefix">Awalan Berurutan (Cth: 001 - Teks)</option>
-                                    <option value="seq_suffix">Akhiran Berurutan (Cth: Teks - 001)</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="name_value" class="form-label">Nilai Teks Baru</label>
-                                <input type="text" class="form-control" name="name_value" placeholder="Masukkan teks (Cth: Promo Diskon)">
-                            </div>
-                        </div>
-
-                        <!-- Pane 2: Kuantitas & Level Min -->
-                         <div class="tab-pane fade" id="quantity-pane" role="tabpanel" aria-labelledby="quantity-tab" tabindex="0">
-                             <div class="mb-3">
-                                <label for="min_level_action" class="form-label">Aksi Stok Minimum</label>
-                                <select class="form-select" name="min_level_action" id="min_level_action">
-                                    <option value="">-- Pilih Aksi --</option>
-                                    <option value="replace">Ganti dengan Nilai Baru</option>
-                                    <option value="add">Tambahkan ke Nilai Eksisting</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="min_level_value" class="form-label">Nilai Numerik</label>
-                                <input type="number" step="0.01" class="form-control" name="min_level_value" min="0" placeholder="Masukkan nilai (Cth: 10 atau 0.5)">
-                            </div>
-                        </div>
-
-                        <!-- Pane 3: Harga & Nilai -->
-                         <div class="tab-pane fade" id="price-pane" role="tabpanel" aria-labelledby="price-tab" tabindex="0">
-                            <div class="mb-3">
-                                <label for="price_action" class="form-label">Aksi Harga</label>
-                                <select class="form-select" name="price_action" id="price_action">
-                                    <option value="">-- Pilih Aksi --</option>
-                                    <option value="replace">Ganti dengan Harga Baru</option>
-                                    <option value="increment">Naikkan Harga (+)</option>
-                                    <option value="decrement">Turunkan Harga (-)</option>
-                                    <option value="multiply">Kalikan Harga (x)</option>
-                                    <option value="divide">Bagikan Harga (:)</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="price_value" class="form-label">Nilai Numerik (Rp)</label>
-                                <input type="number" step="any" class="form-control" name="price_value" min="0" placeholder="Masukkan nilai (Cth: 5000)">
-                            </div>
-                        </div>
-
-                         <!-- Pane 4: Tags & Catatan -->
-                         <div class="tab-pane fade" id="tags-note-pane" role="tabpanel" aria-labelledby="tags-note-tab" tabindex="0">
-
-                            <!-- Tags -->
-                            <h6 class="mt-2">Edit Tags</h6>
-                             <div class="mb-3">
-                                <label for="tags_action" class="form-label">Aksi Tags</label>
-                                <select class="form-select" name="tags_action" id="tags_action">
-                                    <option value="">-- Pilih Aksi --</option>
-                                    <option value="add">Tambahkan Tags Baru</option>
-                                    <option value="remove">Hapus Tags Ini</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="tags_input" class="form-label">Daftar Tags (Pisahkan koma)</label>
-                                <input type="text" class="form-control" name="tags_input" placeholder="Cth: roti, manis, diskon">
-                            </div>
-
-                            <hr>
-
-                            <!-- Notes -->
-                            <h6 class="mt-2">Edit Catatan (Notes)</h6>
-                            <div class="mb-3">
-                                <label for="note_action" class="form-label">Aksi Catatan</label>
-                                <select class="form-select" name="note_action" id="note_action">
-                                    <option value="">-- Pilih Aksi --</option>
-                                    <option value="replace">Ganti dengan Teks Baru</option>
-                                    <option value="prefix">Tambah Awalan (Prefix)</option>
-                                    <option value="suffix">Tambah Akhiran (Suffix)</option>
-                                    <option value="seq_prefix">Awalan Berurutan (Cth: 001 - Teks)</option>
-                                    <option value="seq_suffix">Akhiran Berurutan (Cth: Teks - 001)</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="note_value" class="form-label">Nilai Teks Baru</label>
-                                <textarea class="form-control" name="note_value" rows="2" placeholder="Masukkan catatan baru"></textarea>
-                            </div>
-
-                        </div>
-                    </div>
-
+                    <p>Pindahkan <strong id="moveItemName"></strong> ke:</p>
+                    <select name="folder_id" class="form-select">
+                        <option value="">Root (Tanpa Folder)</option>
+                        @foreach($allFolders as $f)
+                            <option value="{{ $f->id }}">{{ $f->nama }}</option>
+                        @endforeach
+                    </select>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                    <button type="submit" class="btn btn-warning" id="bulkApplyButton">Terapkan Perubahan</button>
+                    <button type="submit" class="btn btn-primary">Pindahkan</button>
                 </div>
-            </form>
-        </div>
+            </div>
+        </form>
     </div>
 </div>
 
+<style>
+    .item-card { transition: all 0.2s; cursor: pointer; border: 1px solid #eee !important; }
+    .item-card:hover { transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1) !important; border-color: #0d6efd !important; }
+    .breadcrumb-item + .breadcrumb-item::before { content: "›"; font-size: 1.2rem; line-height: 1; vertical-align: middle; }
+</style>
 
-<!-- SCRIPT JS SELEKSI (DARI FASE 8) -->
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const selectAllCheckbox = document.getElementById('selectAllItems');
-    const itemCheckboxes = document.querySelectorAll('.item-checkbox');
-    const bulkActionsContainer = document.getElementById('bulkActions');
-    const selectedCountSpan = document.getElementById('selectedCount');
-    const selectedItemsInput = document.getElementById('selectedItemsInput');
-    const modalSelectedCount = document.getElementById('modalSelectedCount');
-    const bulkApplyButton = document.getElementById('bulkApplyButton');
+function openQtyModal(id) {
+    const form = document.getElementById('qtyForm');
+    form.action = `/item/${id}/update-quantity`;
+    new bootstrap.Modal(document.getElementById('qtyModal')).show();
+}
 
-    // Array untuk menyimpan ID item yang terpilih
-    let selectedItemIds = [];
+function openMoveModal(id, name) {
+    const form = document.getElementById('moveForm');
+    form.action = `/item/${id}/move`;
+    document.getElementById('moveItemName').textContent = name;
+    new bootstrap.Modal(document.getElementById('moveModal')).show();
+}
 
-    // Fungsi untuk mengupdate status tombol dan hitungan
-    function updateSelectionStatus() {
-        selectedItemIds = Array.from(itemCheckboxes)
-            .filter(cb => cb.checked)
-            .map(cb => cb.getAttribute('data-item-id'));
+document.addEventListener('DOMContentLoaded', function() {
+    const checkboxes = document.querySelectorAll('.item-checkbox');
+    const bulkBar = document.getElementById('bulkActions');
+    const selectedCount = document.getElementById('selectedCount');
 
-        const count = selectedItemIds.length;
-
-        // Tampilkan/Sembunyikan Kontrol Bulk Action
-        if (count > 0) {
-            bulkActionsContainer.style.display = 'block';
-            bulkApplyButton.disabled = false;
-        } else {
-            bulkActionsContainer.style.display = 'none';
-            bulkApplyButton.disabled = true;
-        }
-
-        // Update hitungan di tampilan utama dan modal
-        selectedCountSpan.textContent = `${count} Item Terpilih`;
-        modalSelectedCount.innerHTML = `Mempersiapkan edit untuk <span class="fw-bold text-primary">${count} item</span>.`;
-
-        // Update input tersembunyi untuk dikirim ke Controller
-        selectedItemsInput.value = JSON.stringify(selectedItemIds);
-
-        // Update status 'Pilih Semua'
-        selectAllCheckbox.checked = count === itemCheckboxes.length && itemCheckboxes.length > 0;
-    }
-
-    // Listener untuk Item Individu
-    itemCheckboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            // Beri highlight pada card wrapper
-            const cardWrapper = this.closest('.item-card-wrapper');
-            if (this.checked) {
-                cardWrapper.classList.add('border', 'border-primary', 'border-3');
-            } else {
-                cardWrapper.classList.remove('border', 'border-primary', 'border-3');
-            }
-            updateSelectionStatus();
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', () => {
+            const checked = document.querySelectorAll('.item-checkbox:checked');
+            bulkBar.style.display = checked.length > 0 ? 'block' : 'none';
+            selectedCount.textContent = checked.length + ' Items Selected';
         });
     });
-
-    // Listener untuk Pilih Semua
-    selectAllCheckbox.addEventListener('change', function() {
-        itemCheckboxes.forEach(checkbox => {
-            checkbox.checked = this.checked;
-            const cardWrapper = checkbox.closest('.item-card-wrapper');
-             if (this.checked) {
-                cardWrapper.classList.add('border', 'border-primary', 'border-3');
-            } else {
-                cardWrapper.classList.remove('border', 'border-primary', 'border-3');
-            }
-        });
-        updateSelectionStatus();
-    });
-
-    // Inisialisasi status saat halaman dimuat
-    updateSelectionStatus();
 });
 </script>
 @endsection

@@ -35,15 +35,246 @@ Jadi intinya data bom itu sama kayak items, bedanya adalah lu bisa nambahin mate
 
 Untuk input varian di item, tambahkan tombol + untuk nambah input varian. Misal user mau input varian ukuran dan warna, jadi user bakal input nama varian 'ukuran' dengan varian kecil, besar. Lalu user tekan tombol + untuk menambah varian lain, diisi dengan 'warna' dengan varian putih, biru. Ketika user selesai membuat item tersebut, maka akan ada 2x2 = 4 item yang dibuat, yaitu kecil
 
-
-
-
 Bisa juga UI bom di-merge ke items. Jadi di UI items nanti ada 3 tombol create: buat item, buat bom, dan buat folder.
 
 buat UI create bom, itu bakal sama kayak UI create item, paling bedanya adalah penambahan input 'tambah material' berupa dropdown semua item dan bom yang sudah dibuat dan user juga bisa search di dropdown itu serta ada tombol + untuk menambahkan material lagi. User juga bisa bikin varian, tapi kalo checkbox 'varian' dicentang, maka input material menghilang tapi isi inputnya masih disimpan karena mungkin user salah tekan checkbox varian itu. Jadi ketika centang varian dihilangkan, maka input material yang mungkin udah sempet diisi user akan dipulihkan. Input varian juga kalo sempet user isi, maka ketika user uncheck-check box varian, maka input varian sebelumnya akan dipulihkan.
 
 
-Coba cek lagi fase-fase rombakan IMS kita bro, bakal ada yang berubah gak karena pengubahan logika BOM ini.
+Jangan kasih kodingan dulu, kamu fokus cek lagi fase-fase rombakan IMS kita bro, bakal ada yang berubah gak karena pengubahan logika BOM ini.
+
+
+
+
+
+
+- Di UI items masih belum ada fitur folder
+- masih ada Resep (BOM) di navigation
+- Di UI Items, tombol ekspor selalu tersedia bahkan ketika saya belum select apapun, seharusnya tombol ekspor itu muncul ketika user select item, seperti tombol edit massal
+- tombol ekspor error:
+
+
+
+
+
+
+
+
+- tombol Resep (BOM) di navigasi tuh masih ada, itu seharusnya gak perlu kan? toh pas dibuka juga error database yang berhubungan dengan tabel produk_jadi yang sudah dihapus dan BOM itu sudah dimerge ke UI items
+- aku curiga pas copy paste kode yang barusan loe berikan, kenapa line code buat UI item sama Item Controller malah berkurang. Ternyata bener error:
+InvalidArgumentException
+vendor\laravel\framework\src\Illuminate\View\FileViewFinder.php:138
+View [item.bulk_edit_modal] not found.
+
+LARAVEL
+12.40.2
+PHP
+8.2.12
+UNHANDLED
+CODE 0
+500
+GET
+http://localhost:8000/item
+
+Exception trace
+3 vendor frames
+
+resources\views\item\index.blade.php
+resources\views\item\index.blade.php:144
+
+139        </div>
+140    </div>
+141</div>
+142
+143<!-- Modal Edit Massal (DARI FASE 10) -->
+144@include('item.bulk_edit_modal')
+145
+146<!-- SCRIPT JS SELEKSI (DARI FASE 8) -->
+147<script>
+148document.addEventListener('DOMContentLoaded', function () {
+149    const selectAllCheckbox = document.getElementById('selectAllItems');
+150    const itemCheckboxes = document.querySelectorAll('.item-checkbox');
+151    const bulkActionsContainer = document.getElementById('bulkActions');
+152    const selectedCountSpan = document.getElementById('selectedCount');
+153    const selectedItemsInput = document.getElementById('selectedItemsInput');
+154    const modalSelectedCount = document.getElementById('modalSelectedCount');
+155    const bulkApplyButton = document.getElementById('bulkApplyButton');
+156
+13 vendor frames
+
+app\Http\Middleware\ForceLocalhost.php
+app\Http\Middleware\ForceLocalhost.php:36
+
+45 vendor frames
+
+public\index.php
+public\index.php:20
+
+1 vendor frame
+
+Queries
+1-6 of 6
+mysql
+select * from `sessions` where `id` = 'gaPjFdmoTAb96fdwzoeUtXVaqNZxuzik2AukgYRw' limit 1
+20.87ms
+mysql
+select * from `users` where `id` = 1 limit 1
+0.69ms
+mysql
+select count(*) as aggregate from `items`
+0.44ms
+mysql
+select * from `items` order by `nama` asc limit 15 offset 0
+0.5ms
+mysql
+select * from `items` where `items`.`id` = 1 limit 1
+0.73ms
+mysql
+select * from `items` where `items`.`id` = 4 limit 1
+0.45ms
+
+
+
+
+
+
+
+
+
+
+
+- Pas gue coba bikin folder juga error bro:
+BadMethodCallException
+vendor\laravel\framework\src\Illuminate\Support\Traits\ForwardsCalls.php:67
+Call to undefined method App\Models\Item::itemsInFolder()
+
+LARAVEL
+12.40.2
+PHP
+8.2.12
+UNHANDLED
+CODE 0
+500
+GET
+http://localhost:8000/folders
+
+Exception trace
+3 vendor frames
+
+resources\views\folder\index.blade.php
+resources\views\folder\index.blade.php:27
+
+22            <div class="card-body">
+23                <ul class="list-group list-group-flush">
+24                    @forelse ($folders as $folder)
+25                        <li class="list-group-item d-flex justify-content-between align-items-center">
+26                            <i class="fas fa-folder me-2 text-warning"></i> {{ $folder->nama }}
+27                            <span class="badge bg-primary rounded-pill">{{ $folder->itemsInFolder()->count() }} Item</span>
+28                        </li>
+29                    @empty
+30                        <li class="list-group-item text-center text-muted">Belum ada folder terdaftar.</li>
+31                    @endforelse
+32                </ul>
+33            </div>
+34        </div>
+35    </div>
+36
+37    <!-- Daftar Item di Root -->
+38    <div class="col-md-8">
+39
+13 vendor frames
+
+app\Http\Middleware\ForceLocalhost.php
+app\Http\Middleware\ForceLocalhost.php:36
+
+45 vendor frames
+
+public\index.php
+public\index.php:20
+
+1 vendor frame
+
+Queries
+1-4 of 4
+mysql
+select * from `sessions` where `id` = 'gaPjFdmoTAb96fdwzoeUtXVaqNZxuzik2AukgYRw' limit 1
+23.02ms
+mysql
+select * from `users` where `id` = 1 limit 1
+0.48ms
+mysql
+select * from `items` where `tags` like '%"folder"%' and `parent_id` is null order by `nama` asc
+0.67ms
+mysql
+select * from `items` where `folder_id` is null and `parent_id` is null and `tags` not like '%"folder"%' order by `nama` asc
+0.54ms
+
+
+
+
+
+
+
+
+
+
+
+
+
+- Gue perhatikan pas mau edit item, folder, ataupun BOM, itu input yang sama, padahal mereke bertiga itu punya input yang berbeda. 
+
+- seharusnya card folder itu cuma berisi nama, serta gambar item/folder yang terkahir kali dimasukkan ke situ.
+
+- seharusnya card item, BOM, dan folder itu bisa diklik. Kalo card item/BOM diklik, maka akan terbuka UI yang menampilkan detailnya secara lengkap dan ada tombol activity history yang akan menampilkan UI yang berisi activity history dari item itu, serta ada tombol edit item di UI detail itu dan ada tombol move to folder. Kalo card folder diklik, maka akan tampil UI yang menampilkan isi folder tersebut. Kalo foldernya kosong, tampilkan saja keterangan 'wah foldernya kosong! kamu bisa pindahkan item/folder yang sudah ada ke sini, atau membuat item/folder baru dan mengisinya ke sini'
+
+- gue juga ingin agar ketika membuka UI item, maka akan muncul folder navigation di sebelah menu navigation, sehingga user bisa pindah folder lebih mudah dan tahu dia sedang berada di folder apa sekarang.
+
+- gue ingin agar di folder navigation, nama item/folder/BOM hanya ditampilkan sebanyak 1 line, jadi kalo namanya kepanjangan, yang tampil hanya sepanjang navigation bar itu. Jadi gue juga ingin agar folder navigationnya itu bisa ditarik ke kanan dan menggeser UI items sehingga UI items menjadi lebih sempit, jadi user bisa lihat nama data yang terlalu panjang, dan ketika user ingin fokus ke UI item lagi, user bisa geser folder navigation itu ke kiri. Sama seperti sistem window/docker pada umumnya, jika ada 2 window dan salah satu digeser, maka yang lainnya akan menjadi sempit dan yang satunya lagi jadi lebih luas.
+
+- kok folder tuh item yang punya tag folder, masa iya kalo item gue kasih tag folder jadi folder?
+
+- ketika create item, BOM, dan folder, tambahkan input dropdown 'add to folder', jadi user bisa langsung masukin ke folder. Item juga kalo pas create punya varian dan user decide buat masukin item itu ke folder, maka semua varian item itu bakal masuk ke folder itu.
+
+- gue juga ingin agar app ini menerapkan soft delete. 
+
+- gue juga ingin agar tombol di card data ditambahkan tombol 'pindahkan ke folder' dan tombol 'update quantity'
+
+- seharusnya menu navigation tuh fit to screen dan gak bisa di scroll. Jadi gue ingin agar user scroll sesuai posisi cursor. kalo cursor lagi di UI item, maka UI item aja yang terscroll, navigation lain gak ikut terscroll. Kalo cursor lagi di folder nav, maka folder nav aja yang terscroll. 
+
+
+Jangan kasih kodingan dulu bro, sekarang lu fokus aja bikin fase-fase untuk perbaikan ini bro.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+- masih error bro saat delete data:
+Terjadi kesalahan saat menghapus item: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'transaksis.produk_jadi_id' in 'where clause' (Connection: mysql, SQL: select exists(select * from `transaksis` where `transaksis`.`produk_jadi_id` = 9 and `transaksis`.`produk_jadi_id` is not null) as `exists`)
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -60,6 +291,14 @@ Coba cek lagi fase-fase rombakan IMS kita bro, bakal ada yang berubah gak karena
 
 
 name: star crate ✨📦
+! tags, filter
+! search, report (activity history, transaction, low stock)
+! hover items navigation muncul tombol add item & add folder
+! cegah user untuk close tab saat masih edit/create data
+! apakah bisa undo edit massal?
+
+
+edit nama folder dan menambahkan tags
 
 
 

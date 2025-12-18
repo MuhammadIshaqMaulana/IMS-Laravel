@@ -4,26 +4,16 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Item extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'nama',
-        'sku',
-        'satuan',
-        'stok_saat_ini',
-        'stok_minimum',
-        'harga_jual',
-        'pemasok',
-        'note',
-        'tags',
-        'custom_fields',
-        'image_link',
-        'materials',
-        'folder_id',
-        'parent_id',
+        'nama', 'sku', 'satuan', 'stok_saat_ini', 'stok_minimum',
+        'harga_jual', 'pemasok', 'note', 'tags', 'custom_fields',
+        'image_link', 'materials', 'folder_id', 'parent_id',
     ];
 
     protected $casts = [
@@ -35,67 +25,42 @@ class Item extends Model
         'harga_jual' => 'integer',
     ];
 
-    // --- ACCESOR BARU UNTUK STOK TERHITUNG (CALCULATED STOCK) ---
-    protected $appends = ['calculated_stock']; // Tambahkan accessor ke array JSON
+    protected $appends = ['calculated_stock', 'is_folder', 'is_bom'];
 
-    /**
-     * Accessor untuk mendapatkan Stok Terhitung (Kapasitas Produksi Maksimum).
-     * Jika item adalah BOM (memiliki materials), stok dihitung dari material.
-     * Jika item bukan BOM, stoknya adalah stok_saat_ini.
-     */
-    public function getCalculatedStockAttribute(): float
-    {
-        // Jika item ini BUKAN BOM/Kit
-        if (empty($this->materials)) {
-            return (float) $this->stok_saat_ini;
+    // --- ACCESSORS ---
+
+    public function getIsFolderAttribute(): bool {
+        return is_array($this->tags) && in_array('folder', $this->tags);
+    }
+
+    public function getIsBomAttribute(): bool {
+        return !empty($this->materials);
+    }
+
+    public function getCalculatedStockAttribute(): float {
+        if (!$this->is_bom) return (float) $this->stok_saat_ini;
+        $minCapacity = INF;
+        foreach ($this->materials as $mat) {
+            $mItem = Item::find($mat['item_id']);
+            if (!$mItem || $mat['qty'] <= 0) continue;
+            $cap = floor($mItem->stok_saat_ini / $mat['qty']);
+            if ($cap < $minCapacity) $minCapacity = $cap;
         }
-
-        // --- Logika Perhitungan Stok BOM ---
-
-        $minCapacity = INF; // Mulai dengan kapasitas tak terhingga
-
-        // Loop melalui setiap material penyusun BOM
-        foreach ($this->materials as $materialData) {
-            $materialId = $materialData['item_id'];
-            $qtyRequired = (float) $materialData['qty'];
-
-            // Ambil data stok material dari database
-            // Kita gunakan find() untuk menghindari relasi rekursif yang kompleks di sini
-            $materialItem = Item::find($materialId);
-
-            // Jika material tidak ditemukan atau jumlah yang dibutuhkan 0, lewati
-            if (!$materialItem || $qtyRequired <= 0) {
-                continue;
-            }
-
-            // Kapasitas yang dapat dibuat berdasarkan material ini
-            $capacity = floor($materialItem->stok_saat_ini / $qtyRequired);
-
-            // Batasan (Bottleneck): Ambil kapasitas terendah
-            if ($capacity < $minCapacity) {
-                $minCapacity = $capacity;
-            }
-        }
-
-        // Jika tidak ada material atau hitungan tidak valid, stok dianggap 0
         return $minCapacity === INF ? 0.0 : (float) $minCapacity;
     }
 
-    // --- RELASI SISA ---
-
-    public function folder()
-    {
-        return $this->belongsTo(Item::class, 'folder_id');
+    /**
+     * Helper untuk mengambil gambar terakhir dari item di dalam folder ini
+     */
+    public function getLastItemImage() {
+        $lastItem = $this->itemsInFolder()->whereNotNull('image_link')->latest()->first();
+        return $lastItem ? $lastItem->image_link : null;
     }
 
-    public function parent()
-    {
-        return $this->belongsTo(Item::class, 'parent_id');
-    }
-
-    public function transaksis()
-    {
-        // Menggunakan produk_jadi_id sebagai kolom FK karena belum direname
-        return $this->hasMany(Transaksi::class, 'produk_jadi_id');
-    }
+    // --- RELATIONS ---
+    public function folder() { return $this->belongsTo(Item::class, 'folder_id'); }
+    public function itemsInFolder() { return $this->hasMany(Item::class, 'folder_id'); }
+    public function parent() { return $this->belongsTo(Item::class, 'parent_id'); }
+    public function variants() { return $this->hasMany(Item::class, 'parent_id'); }
+    public function transaksis() { return $this->hasMany(Transaksi::class, 'item_id'); }
 }

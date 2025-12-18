@@ -35,7 +35,7 @@ class TransaksiController extends Controller
                              ->with('warning', 'Anda harus memiliki setidaknya satu Item (BOM/Kit) dengan material yang terdefinisi sebelum mencatat produksi/perakitan.');
         }
 
-        return view('transaksi.create', compact('bomItems')); // Variabel diubah
+        return view('transaksi.create', compact('bomItems'));
     }
 
     /**
@@ -44,13 +44,13 @@ class TransaksiController extends Controller
     public function store(Request $request)
     {
         $validatedData = $request->validate([
-            'produk_jadi_id' => 'required|exists:items,id',
+            'item_id' => 'required|exists:items,id', // FIXED: Menggunakan item_id
             'jumlah_produksi' => 'required|integer|min:1',
             'tanggal_produksi' => 'required|date',
             'catatan' => 'nullable|string|max:500',
         ]);
 
-        $itemId = $validatedData['produk_jadi_id'];
+        $itemId = $validatedData['item_id'];
         $jumlahProduksi = $validatedData['jumlah_produksi'];
 
         // Mengambil Item (BOM/Kit)
@@ -61,14 +61,13 @@ class TransaksiController extends Controller
         if (empty($resepMaterials) || !is_array($resepMaterials)) {
              return redirect()->back()
                              ->withInput()
-                             ->withErrors(['produk_jadi_id' => 'Item yang dipilih bukan BOM (tidak memiliki material).']);
+                             ->withErrors(['item_id' => 'Item yang dipilih bukan BOM (tidak memiliki material).']);
         }
 
         DB::beginTransaction();
 
         try {
             // 1. Cek Ketersediaan Stok Bahan Mentah
-            // $resepMaterials kini adalah array seperti: [{'item_id': 1, 'qty': 2.0}, ...]
             foreach ($resepMaterials as $material) {
                 $materialItemId = $material['item_id'];
                 $jumlahDibutuhkan = $material['qty'] * $jumlahProduksi;
@@ -101,7 +100,7 @@ class TransaksiController extends Controller
 
             // 4. Catat Transaksi
             Transaksi::create([
-                'produk_jadi_id' => $itemId,
+                'item_id' => $itemId, // FIXED: Menyimpan ke item_id
                 'jumlah_produksi' => $jumlahProduksi,
                 'tanggal_produksi' => $validatedData['tanggal_produksi'],
                 'catatan' => $validatedData['catatan'],
@@ -118,7 +117,7 @@ class TransaksiController extends Controller
                              ->with('error', 'Terjadi kesalahan saat memproses transaksi: ' . $e->getMessage());
         }
     }
-    // Metode resource lainnya dinonaktifkan untuk Transaksi karena membatalkan histori tidak diizinkan.
+
     public function show() { abort(404); }
     public function edit() { abort(404); }
     public function update() { abort(404); }

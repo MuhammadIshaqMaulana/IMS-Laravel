@@ -4,16 +4,16 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes; // Tambahkan SoftDeletes
 
 class Transaksi extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes; // Gunakan SoftDeletes
 
-    // Model Transaksi akan merujuk ke tabel 'transaksis'
     protected $table = 'transaksis';
 
     protected $fillable = [
-        'produk_jadi_id',
+        'item_id',
         'jumlah_produksi',
         'tanggal_produksi',
         'catatan',
@@ -23,11 +23,8 @@ class Transaksi extends Model
         'tanggal_produksi' => 'datetime',
     ];
 
-    /**
-     * Relasi: Transaksi ini dibuat untuk satu Produk Jadi.
-     */
-    public function produkJadi(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    public function itemProduksi(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
-        return $this->belongsTo(ProdukJadi::class, 'produk_jadi_id');
+        return $this->belongsTo(Item::class, 'item_id');
     }
 }
