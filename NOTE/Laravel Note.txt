@@ -1,6 +1,7 @@
 Google OpenAuth = laravel socialite default package
 
 
+Catatan Penting: Untuk menjalankan $table->change(), loe mungkin butuh package pendukung jika belum ada. Jalankan composer require doctrine/dbal jika muncul error saat migrate. Setelah itu, jalankan php artisan migrate.
 
 
 

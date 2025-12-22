@@ -280,6 +280,20 @@ Terjadi kesalahan saat menghapus item: SQLSTATE[42S22]: Column not found: 1054 U
 
 
 
+- tidak bisa edit quantity, padahal setiap selesai edit, notifikasinya berhasil dan memang edit yang lain itu berhasil
+- tidak ada perubahan pada history aktivitas setelah saya edit barang
+- tombol +- untuk edit quantity, bulk edit, dan 'pindahkan' tidak berfungsi
+
+
+
+
+
+
+
+
+
+
+saya coba tombol +- edit quantity, menambah stok berjalan lancar, namun mengurangi stok dengan input -20 misalnya itu di database quantitynya berkurang, namun error:
 
 
 
@@ -301,8 +315,11 @@ name: star crate ✨📦
 edit nama folder dan menambahkan tags
 
 
+folder in folder works, tapi navigasi folder berupa teks atas dan belum ada hirarki folder di kiri 
 
+hapus tombol +- card BOM
 
+😡 Nyari tutorial folder malah yg muncul laravel directory explained
 
 
 
