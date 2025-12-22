@@ -8,4 +8,20 @@ Solusi terbaik adalah menghapus sintaks yang menyebabkan fatal error dari bootst
 3. Aku tidak perlu memasukkan user di google console agar dia bisa login. Semua akun google bisa login disitu. Pada aplikasi ini sekarang, cara dia menentukan orang itu admin atau bukan adalah dengan melihat di .env ADMIN_EMAILS=lanakeren20@gmail.com
 
 UI FRONT END
-4. 
+4. bro, coba jelasin dong gimana cara sistem folder dalam aplikasi kita bekerja
+
+Terus aku mau ngasih tau, kalo misal kita punya folder :
+
+- A
+-- B
+--- B1
+-- C
+--- C1
+
+Gue pindahkan A ke C1, dan itu berhasil, yang seharusnya gak berhasil.
+
+- Nama folder juga gak boleh sama pada level yang sama.
+Gue ingin loe jangan ngoding dulu, coba fokus jelasin bagaimana solusi cara kerja terbaik untuk sistem folder ini.
+
+5.
+

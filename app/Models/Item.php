@@ -13,7 +13,7 @@ class Item extends Model
     protected $fillable = [
         'nama', 'sku', 'satuan', 'stok_saat_ini', 'stok_minimum',
         'harga_jual', 'pemasok', 'note', 'tags', 'custom_fields',
-        'image_link', 'materials', 'folder_id', 'parent_id',
+        'image_link', 'materials', 'folder_id', 'parent_id', 'path'
     ];
 
     protected $casts = [
@@ -26,6 +26,33 @@ class Item extends Model
     ];
 
     protected $appends = ['calculated_stock', 'is_folder', 'is_bom'];
+
+    // --- LOGIKA PATH ---
+
+    /**
+     * Memperbarui path item ini berdasarkan parent-nya.
+     */
+    public function updatePath(): void
+    {
+        if ($this->folder_id) {
+            $parent = self::find($this->folder_id);
+            // Path item adalah path parent + ID item saat ini
+            $this->path = ($parent->path ?? '/') . $this->id . '/';
+        } else {
+            // Jika di Root, path hanya berisi ID sendiri
+            $this->path = '/' . $this->id . '/';
+        }
+        $this->saveQuietly(); // Simpan tanpa memicu event saving lagi
+    }
+
+    /**
+     * Cek apakah item ini adalah keturunan (anak/cucu) dari folder target.
+     */
+    public function isDescendantOf($folderId): bool
+    {
+        if (!$this->path) return false;
+        return str_contains($this->path, "/{$folderId}/");
+    }
 
     // --- ACCESSORS ---
 
@@ -41,7 +68,7 @@ class Item extends Model
         if (!$this->is_bom) return (float) $this->stok_saat_ini;
         $minCapacity = INF;
         foreach ($this->materials as $mat) {
-            $mItem = Item::find($mat['item_id']);
+            $mItem = self::find($mat['item_id']);
             if (!$mItem || $mat['qty'] <= 0) continue;
             $cap = floor($mItem->stok_saat_ini / $mat['qty']);
             if ($cap < $minCapacity) $minCapacity = $cap;
@@ -49,9 +76,6 @@ class Item extends Model
         return $minCapacity === INF ? 0.0 : (float) $minCapacity;
     }
 
-    /**
-     * Helper untuk mengambil gambar terakhir dari item di dalam folder ini
-     */
     public function getLastItemImage() {
         $lastItem = $this->itemsInFolder()->whereNotNull('image_link')->latest()->first();
         return $lastItem ? $lastItem->image_link : null;
