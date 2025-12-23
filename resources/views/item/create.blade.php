@@ -44,9 +44,10 @@
                 </div>
 
                 <div id="standard_fields" class="row">
-                    <div class="col-md-4 mb-3"><label class="form-label">Satuan</label><input type="text" name="satuan" class="form-control" placeholder="pcs, kg"></div>
-                    <div class="col-md-4 mb-3" id="qty_group"><label class="form-label">Stok Awal</label><input type="number" name="stok_saat_ini" class="form-control" value="0"></div>
-                    <div class="col-md-4 mb-3"><label class="form-label">Harga @</label><input type="number" name="harga_jual" class="form-control" value="0"></div>
+                    <div class="col-md-3 mb-3"><label class="form-label">Satuan</label><input type="text" name="satuan" class="form-control" placeholder="pcs, kg"></div>
+                    <div class="col-md-3 mb-3" id="qty_group"><label class="form-label">Stok Awal</label><input type="number" name="stok_saat_ini" class="form-control" value="0"></div>
+                    <div class="col-md-3 mb-3"><label class="form-label">Stok Minimum (Restored)</label><input type="number" name="stok_minimum" class="form-control" value="0"></div>
+                    <div class="col-md-3 mb-3"><label class="form-label">Harga @</label><input type="number" name="harga_jual" class="form-control" value="0"></div>
                 </div>
 
                 <!-- Tags Input (Restored) -->

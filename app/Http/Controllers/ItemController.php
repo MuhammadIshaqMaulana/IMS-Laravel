@@ -13,134 +13,102 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class ItemController extends Controller
 {
     /**
-     * Menampilkan daftar gabungan Folder dan Item berdasarkan lokasi saat ini.
+     * Tampilan Utama: Folder + Item + Search Global + Breadcrumbs.
      */
     public function index(Request $request)
     {
         $folderId = $request->query('folder_id');
+        $search = $request->query('q');
         $breadcrumbs = collect([]);
 
-        if ($folderId) {
-            $currentFolder = Folder::with('parent')->findOrFail($folderId);
-            $breadcrumbs = $currentFolder->getBreadcrumbs();
+        $folderQuery = Folder::query();
+        $itemQuery = Item::query();
 
-            $subFolders = Folder::where('parent_id', $folderId)->orderBy('nama')->get();
-            $items = Item::where('folder_id', $folderId)->orderBy('nama')->paginate(15);
-        } else {
+        if ($search) {
+            // PENCARIAN GLOBAL
+            $subFolders = $folderQuery->where('nama', 'LIKE', "%{$search}%")->orderBy('nama')->get();
+            $items = $itemQuery->where(function($q) use ($search) {
+                        $q->where('nama', 'LIKE', "%{$search}%")
+                          ->orWhere('sku', 'LIKE', "%{$search}%")
+                          ->orWhere('tags', 'LIKE', "%{$search}%");
+                    })->orderBy('nama')->paginate(15)->appends(['q' => $search]);
             $currentFolder = null;
-            $subFolders = Folder::whereNull('parent_id')->orderBy('nama')->get();
-            $items = Item::whereNull('folder_id')->orderBy('nama')->paginate(15);
+        } else {
+            // NAVIGASI BIASA
+            if ($folderId) {
+                $currentFolder = Folder::with('parent')->findOrFail($folderId);
+                $breadcrumbs = $currentFolder->getBreadcrumbs();
+                $subFolders = Folder::where('parent_id', $folderId)->orderBy('nama')->get();
+                $items = Item::where('folder_id', $folderId)->orderBy('nama')->paginate(15)->appends(['folder_id' => $folderId]);
+            } else {
+                $currentFolder = null;
+                $subFolders = Folder::whereNull('parent_id')->orderBy('nama')->get();
+                $items = Item::whereNull('folder_id')->orderBy('nama')->paginate(15);
+            }
         }
 
-        // Ambil semua folder untuk Sidebar dan Modal
         $allFolders = Folder::orderBy('nama')->get();
 
-        return view('item.index', compact('items', 'subFolders', 'currentFolder', 'allFolders', 'breadcrumbs'));
+        return view('item.index', compact('items', 'subFolders', 'currentFolder', 'allFolders', 'breadcrumbs', 'search'));
     }
 
-    /**
-     * Form Create Item/BOM/Folder.
-     */
     public function create()
     {
-        // Hanya item murni (bukan BOM) yang bisa jadi bahan baku BOM
         $allMaterials = Item::whereNull('materials')->orderBy('nama')->get();
         $allFolders = Folder::orderBy('nama')->get();
         return view('item.create', compact('allMaterials', 'allFolders'));
     }
 
-    /**
-     * Store Universal: Folder, Item, BOM, & Generator Varian Mandiri.
-     */
     public function store(Request $request)
     {
-        $request->validate([
-            'nama' => 'required|string|max:100',
-            'type' => 'required|in:item,bom,folder',
-            'folder_id' => 'nullable|exists:folders,id',
-            'stok_saat_ini' => 'nullable|numeric',
-        ]);
-
+        $request->validate(['nama' => 'required|string|max:100', 'type' => 'required|in:item,bom,folder']);
         $folderId = $request->folder_id;
 
-        // GUARD: Cek duplikasi nama di lokasi yang sama (Cek di kedua tabel agar tidak ada nama yang sama)
-        $nameExistsInFolders = Folder::where('nama', $request->nama)->where('parent_id', $folderId)->exists();
-        $nameExistsInItems = Item::where('nama', $request->nama)->where('folder_id', $folderId)->exists();
-
-        if ($nameExistsInFolders || $nameExistsInItems) {
-            return redirect()->back()->withInput()->with('error', "Gagal: Nama '{$request->nama}' sudah ada di lokasi ini.");
+        if (Folder::where('nama', $request->nama)->where('parent_id', $folderId)->exists() ||
+            Item::where('nama', $request->nama)->where('folder_id', $folderId)->exists()) {
+            return redirect()->back()->withInput()->with('error', "Gagal: Nama sudah ada di lokasi ini.");
         }
 
         DB::beginTransaction();
         try {
             if ($request->type === 'folder') {
-                // SIMPAN SEBAGAI FOLDER
-                $folder = Folder::create([
-                    'nama' => $request->nama,
-                    'parent_id' => $folderId
-                ]);
+                $folder = Folder::create(['nama' => $request->nama, 'parent_id' => $folderId]);
                 $folder->updatePath();
             } else {
-                // LOGIKA ITEM / BOM / VARIAN
                 $dimensions = json_decode($request->variant_dimensions, true) ?: [];
-
                 if (empty($dimensions)) {
-                    // Item Tunggal atau BOM
                     $this->createNewItem($request, $request->nama, $folderId);
                 } else {
-                    // GENERATOR VARIAN MANDIRI (Sesuai request: Tidak terikat parent_id)
                     $this->generateIndependentVariants($request, $dimensions, $folderId);
                 }
             }
-
             DB::commit();
-            return redirect()->route('item.index', ['folder_id' => $folderId])->with('success', 'Data berhasil dibuat!');
+            return redirect()->route('item.index', ['folder_id' => $folderId])->with('success', 'Berhasil dibuat!');
         } catch (\Exception $e) {
             DB::rollBack();
-            return redirect()->back()->withInput()->with('error', 'Terjadi kesalahan: ' . $e->getMessage());
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
     }
 
-    /**
-     * Detail Item.
-     */
     public function show(Item $item)
     {
         $history = $item->transaksis()->orderBy('tanggal_produksi', 'desc')->get();
-        return view('item.show', compact('item', 'history'));
+        $stats = [
+            'total_in' => $item->transaksis()->where('jumlah_produksi', '>', 0)->sum('jumlah_produksi'),
+            'total_out' => abs($item->transaksis()->where('jumlah_produksi', '<', 0)->sum('jumlah_produksi')),
+        ];
+        return view('item.show', compact('item', 'history', 'stats'));
     }
 
-    /**
-     * Form Edit Item.
-     */
     public function edit(Item $item)
     {
         $allFolders = Folder::orderBy('nama')->get();
         return view('item.edit', compact('item', 'allFolders'));
     }
 
-    /**
-     * Update Item dengan History Logging & Duplicate Check.
-     */
     public function update(Request $request, Item $item)
     {
-        $request->validate([
-            'nama' => 'required|string|max:100',
-            'stok_saat_ini' => 'nullable|numeric',
-        ]);
-
-        // GUARD: Cek duplikasi nama di lokasi tujuan (abaikan diri sendiri)
-        $nameExists = Item::where('nama', $request->nama)
-            ->where('folder_id', $request->folder_id)
-            ->where('id', '!=', $item->id)
-            ->exists() ||
-            Folder::where('nama', $request->nama)
-            ->where('parent_id', $request->folder_id)
-            ->exists();
-
-        if ($nameExists) {
-            return redirect()->back()->withInput()->with('error', "Gagal: Nama sudah digunakan di lokasi tersebut.");
-        }
+        $request->validate(['nama' => 'required|string|max:100']);
 
         $oldStock = (float) $item->stok_saat_ini;
         $newStock = (float) ($request->stok_saat_ini ?? 0);
@@ -163,93 +131,134 @@ class ItemController extends Controller
         return redirect()->route('item.show', $item->id)->with('success', 'Item diperbarui.');
     }
 
-    /**
-     * Move Item atau Folder dengan Ancestry Guard & Duplicate Check.
-     */
-    public function move(Request $request)
+    public function updateFolder(Request $request, Folder $folder)
     {
-        $request->validate([
-            'target_type' => 'required|in:item,folder',
-            'id' => 'required|numeric',
-            'folder_id' => 'nullable|exists:folders,id'
-        ]);
-
-        $targetFolderId = $request->folder_id;
-        $id = $request->id;
-
-        if ($request->target_type === 'folder') {
-            $folder = Folder::findOrFail($id);
-
-            // PROTEKSI 1: Cek Circular Reference
-            if ($targetFolderId == $folder->id) {
-                return redirect()->back()->with('error', 'Gagal: Tidak bisa memindahkan folder ke dalam dirinya sendiri.');
-            }
-            if ($targetFolderId && Folder::findOrFail($targetFolderId)->isDescendantOf($folder->id)) {
-                return redirect()->back()->with('error', 'Gagal: Folder tidak boleh dipindahkan ke dalam subfolder-nya sendiri.');
-            }
-
-            // PROTEKSI 2: Cek Nama Duplikat di tujuan
-            if (Folder::where('nama', $folder->nama)->where('parent_id', $targetFolderId)->where('id', '!=', $id)->exists() ||
-                Item::where('nama', $folder->nama)->where('folder_id', $targetFolderId)->exists()) {
-                return redirect()->back()->with('error', "Gagal: Nama '{$folder->nama}' sudah ada di lokasi tujuan.");
-            }
-
-            $folder->update(['parent_id' => $targetFolderId]);
-            $folder->updatePath();
-
-            // SINKRONISASI PATH KETURUNAN
-            $this->syncDescendantPaths($folder);
-        } else {
-            $item = Item::findOrFail($id);
-
-            // PROTEKSI: Cek Nama Duplikat di tujuan
-            if (Item::where('nama', $item->nama)->where('folder_id', $targetFolderId)->where('id', '!=', $id)->exists() ||
-                Folder::where('nama', $item->nama)->where('parent_id', $targetFolderId)->exists()) {
-                return redirect()->back()->with('error', "Gagal: Nama '{$item->nama}' sudah ada di lokasi tujuan.");
-            }
-
-            $item->update(['folder_id' => $targetFolderId]);
-        }
-
-        return redirect()->back()->with('success', 'Berhasil dipindahkan.');
+        $request->validate(['nama' => 'required|string|max:100']);
+        $folder->update(['nama' => $request->nama]);
+        return redirect()->back()->with('success', 'Folder diubah.');
     }
 
-    /**
-     * Update quantity cepat dari Card (+/-).
-     */
+    public function move(Request $request)
+    {
+        $request->validate(['target_type' => 'required', 'id' => 'required', 'folder_id' => 'nullable']);
+        $targetId = $request->folder_id;
+
+        if ($request->target_type === 'folder') {
+            $folder = Folder::findOrFail($request->id);
+            if ($targetId && Folder::findOrFail($targetId)->isDescendantOf($folder->id)) {
+                return redirect()->back()->with('error', 'Gagal: Silsilah melingkar.');
+            }
+            $folder->update(['parent_id' => $targetId]);
+            $folder->updatePath();
+            $this->syncDescendantPaths($folder);
+        } else {
+            Item::where('id', $request->id)->update(['folder_id' => $targetId]);
+        }
+        return redirect()->back()->with('success', 'Pindah lokasi berhasil.');
+    }
+
     public function updateQuantity(Request $request, Item $item)
     {
         $request->validate(['qty' => 'required|numeric']);
         $item->increment('stok_saat_ini', $request->qty);
         $this->logActivity($item->id, $request->qty, 'Update cepat (+/-)');
-        return redirect()->back()->with('success', 'Stok berhasil diupdate.');
+        return redirect()->back()->with('success', 'Stok diupdate.');
     }
 
     /**
-     * Hapus Item (Soft Delete).
+     * LENGKAP: Bulk Update (Fields, Tags, Move).
      */
-    public function destroy(Item $item)
+    public function bulkUpdate(Request $request)
     {
-        $item->delete();
-        return redirect()->route('item.index')->with('success', 'Item berhasil dihapus.');
+        $itemIds = json_decode($request->selected_items, true);
+        if (empty($itemIds)) return redirect()->back()->with('error', 'Pilih item.');
+
+        $updateData = [];
+        if ($request->filled('min_level_value')) $updateData['stok_minimum'] = $request->min_level_value;
+        if ($request->filled('harga_jual_value')) $updateData['harga_jual'] = floor($request->harga_jual_value);
+        if ($request->filled('satuan_value')) $updateData['satuan'] = $request->satuan_value;
+        if ($request->filled('folder_id_value')) $updateData['folder_id'] = $request->folder_id_value === 'NULL' ? null : $request->folder_id_value;
+
+        DB::beginTransaction();
+        try {
+            if (!empty($updateData)) Item::whereIn('id', $itemIds)->update($updateData);
+            if ($request->filled('tags_input_value')) {
+                $newTags = array_filter(array_map('trim', explode(',', $request->tags_input_value)));
+                foreach (Item::whereIn('id', $itemIds)->get() as $item) {
+                    $item->update(['tags' => array_values(array_unique(array_merge($item->tags ?? [], $newTags)))]);
+                }
+            }
+            DB::commit();
+            return redirect()->back()->with('success', count($itemIds) . ' item diupdate.');
+        } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', 'Gagal.'); }
     }
 
     /**
-     * Hapus Folder (Hanya jika kosong).
+     * BARU: Bulk Clone Data.
      */
-    public function destroyFolder(Folder $folder)
+    public function bulkClone(Request $request)
     {
-        if ($folder->children()->exists() || $folder->items()->exists()) {
-            return redirect()->back()->with('error', 'Gagal: Folder tidak bisa dihapus karena masih berisi data.');
-        }
-        $folder->delete();
-        return redirect()->back()->with('success', 'Folder dihapus.');
+        $itemIds = json_decode($request->selected_items, true);
+        if (empty($itemIds)) return redirect()->back()->with('error', 'Pilih item.');
+
+        DB::beginTransaction();
+        try {
+            foreach ($itemIds as $id) {
+                $original = Item::findOrFail($id);
+                $clone = $original->replicate();
+                $clone->nama = $original->nama . ' - copy';
+                if ($original->sku) $clone->sku = strtoupper(substr($clone->nama, 0, 3)) . '-' . strtoupper(Str::random(6));
+                $clone->save();
+            }
+            DB::commit();
+            return redirect()->back()->with('success', count($itemIds) . ' item berhasil di-clone.');
+        } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', 'Gagal clone.'); }
     }
 
-    // --- INTERNAL HELPERS ---
-
-    private function createNewItem($request, $name, $folderId)
+    /**
+     * BARU: Bulk Quantity Adjustment.
+     */
+    public function bulkUpdateQuantity(Request $request)
     {
+        $itemIds = json_decode($request->selected_items, true);
+        $change = (float) $request->qty_adjustment;
+        if (empty($itemIds) || $change == 0) return redirect()->back()->with('error', 'Input tidak valid.');
+
+        DB::beginTransaction();
+        try {
+            foreach (Item::whereIn('id', $itemIds)->get() as $item) {
+                $item->increment('stok_saat_ini', $change);
+                $this->logActivity($item->id, $change, 'Penyesuaian stok massal');
+            }
+            DB::commit();
+            return redirect()->back()->with('success', 'Stok ' . count($itemIds) . ' item diupdate.');
+        } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', 'Gagal.'); }
+    }
+
+    public function exportCsv() {
+        $items = Item::all();
+        return new StreamedResponse(function() use ($items) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, ['ID', 'Nama', 'SKU', 'Stok', 'Satuan', 'Harga']);
+            foreach ($items as $item) fputcsv($file, [$item->id, $item->nama, $item->sku, $item->calculated_stock, $item->satuan, $item->harga_jual]);
+            fclose($file);
+        }, 200, ['Content-Type' => 'text/csv', 'Content-Disposition' => "attachment; filename=\"inventory.csv\""]);
+    }
+
+    public function exportPdf() {
+        $items = Item::with('folder')->get();
+        return view('item.export_pdf', compact('items'));
+    }
+
+    public function destroy(Item $item) { $item->delete(); return redirect()->route('item.index')->with('success', 'Dihapus.'); }
+
+    public function destroyFolder(Folder $folder) {
+        if ($folder->children()->exists() || $folder->items()->exists()) return redirect()->back()->with('error', 'Folder tidak kosong.');
+        $folder->delete(); return redirect()->back()->with('success', 'Folder dihapus.');
+    }
+
+    // --- HELPERS ---
+    private function createNewItem($request, $name, $folderId) {
         $item = Item::create([
             'nama' => $name,
             'sku' => ($request->type === 'bom') ? 'BOM-' . strtoupper(Str::random(6)) : $this->generateUniqueSku($name),
@@ -262,27 +271,17 @@ class ItemController extends Controller
             'note' => $request->note,
             'tags' => array_filter(array_map('trim', explode(',', $request->tags_input ?? ''))) ?: null,
         ]);
-
-        if ($request->stok_saat_ini > 0) {
-            $this->logActivity($item->id, $request->stok_saat_ini, 'Saldo awal');
-        }
+        if ($request->stok_saat_ini > 0) $this->logActivity($item->id, $request->stok_saat_ini, 'Saldo awal');
     }
 
-    private function generateIndependentVariants($request, $dimensions, $folderId)
-    {
+    private function generateIndependentVariants($request, $dimensions, $folderId) {
         $combinations = $this->generateCombinations($dimensions);
         foreach ($combinations as $combo) {
-            $variantName = $request->nama . ' - ' . implode(', ', $combo);
+            $name = $request->nama . ' - ' . implode(', ', $combo);
             Item::create([
-                'nama' => $variantName,
-                'sku' => $this->generateUniqueSku($variantName),
-                'satuan' => $request->satuan ?? 'pcs',
-                'stok_saat_ini' => 0,
-                'stok_minimum' => $request->stok_minimum ?? 0,
-                'harga_jual' => floor($request->harga_jual ?? 0),
-                'folder_id' => $folderId,
-                'note' => "Varian mandiri dari " . $request->nama,
-                'tags' => array_filter(array_map('trim', explode(',', $request->tags_input ?? ''))) ?: null,
+                'nama' => $name, 'sku' => $this->generateUniqueSku($name), 'satuan' => $request->satuan ?? 'pcs',
+                'stok_saat_ini' => 0, 'stok_minimum' => $request->stok_minimum ?? 0, 'harga_jual' => floor($request->harga_jual ?? 0),
+                'folder_id' => $folderId, 'tags' => array_filter(array_map('trim', explode(',', $request->tags_input ?? ''))) ?: null,
             ]);
         }
     }
@@ -290,19 +289,14 @@ class ItemController extends Controller
     private function generateCombinations($dims, $idx = 0, $curr = []) {
         if ($idx == count($dims)) return [$curr];
         $res = [];
-        $options = array_map('trim', explode(',', $dims[$idx]['options']));
-        foreach ($options as $opt) {
-            $next = $curr; $next[] = $opt;
-            $res = array_merge($res, $this->generateCombinations($dims, $idx + 1, $next));
+        foreach (array_map('trim', explode(',', $dims[$idx]['options'])) as $opt) {
+            $next = $curr; $next[] = $opt; $res = array_merge($res, $this->generateCombinations($dims, $idx + 1, $next));
         }
         return $res;
     }
 
     private function syncDescendantPaths(Folder $folder) {
-        $descendants = Folder::where('path', 'LIKE', $folder->path . '%')->where('id', '!=', $folder->id)->get();
-        foreach ($descendants as $desc) {
-            $desc->updatePath();
-        }
+        foreach (Folder::where('path', 'LIKE', $folder->path . '%')->where('id', '!=', $folder->id)->get() as $desc) $desc->updatePath();
     }
 
     private function logActivity($itemId, $qty, $note) {
@@ -310,21 +304,7 @@ class ItemController extends Controller
     }
 
     private function generateUniqueSku($name) {
-        $prefix = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $name), 0, 3));
-        $sku = $prefix . '-' . strtoupper(Str::random(6));
+        $sku = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $name), 0, 3)) . '-' . strtoupper(Str::random(6));
         return Item::where('sku', $sku)->exists() ? $this->generateUniqueSku($name) : $sku;
-    }
-
-    public function exportCsv() {
-        $items = Item::all();
-        $fileName = 'inventory_' . date('Ymd_His') . '.csv';
-        return new StreamedResponse(function() use ($items) {
-            $file = fopen('php://output', 'w');
-            fputcsv($file, ['ID', 'Nama', 'SKU', 'Stok', 'Satuan', 'Harga']);
-            foreach ($items as $item) {
-                fputcsv($file, [$item->id, $item->nama, $item->sku, $item->calculated_stock, $item->satuan, $item->harga_jual]);
-            }
-            fclose($file);
-        }, 200, ['Content-Type' => 'text/csv', 'Content-Disposition' => "attachment; filename=\"$fileName\""]);
     }
 }

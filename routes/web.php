@@ -41,6 +41,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('item/export/pdf', [ItemController::class, 'exportPdf'])->name('item.export.pdf');
     Route::post('item/bulk-update', [ItemController::class, 'bulkUpdate'])->name('item.bulk-update');
 
+    Route::post('/item/bulk-clone', [ItemController::class, 'bulkClone'])->name('item.bulk-clone');
+    Route::post('/item/bulk-update-quantity', [ItemController::class, 'bulkUpdateQuantity'])->name('item.bulk-update-quantity');
+
     // Resource CRUD Item
     Route::resource('item', ItemController::class);
 
@@ -49,6 +52,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('inventory/move', [ItemController::class, 'move'])->name('item.move');
 
     // 3. Modul Folder & Hierarki
+    Route::put('/folder/{folder}/update', [ItemController::class, 'updateFolder'])->name('folder.update');
     Route::get('folders', [ItemController::class, 'folderIndex'])->name('folder.index');
     Route::post('folders/create', [ItemController::class, 'createFolder'])->name('folder.create');
     // Rute moveItemToFolder (Fase 11) dialihkan ke item.move yang lebih spesifik per item
