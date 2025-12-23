@@ -23,5 +23,9 @@ Gue pindahkan A ke C1, dan itu berhasil, yang seharusnya gak berhasil.
 - Nama folder juga gak boleh sama pada level yang sama.
 Gue ingin loe jangan ngoding dulu, coba fokus jelasin bagaimana solusi cara kerja terbaik untuk sistem folder ini.
 
-5.
+5. AKAR MASALAH = data Folder masih di dalam Item dan hanya mengandalkan tags 'folder'. Ini membuat user bisa input item dan menambahkan tag folder sehingga item tersebut malah menjadi folder yang seharusnya prohibited. 
+Sedari awal, tabel Item itu untuk Item dan BOM, bukan buat folder.  Gue mau Tags digunakan sebagai keterangan tambahan Item/Bom tersebut, bukan sebagai identitas folder. Gue juga ga mau ada folder_id dan folder_parent dalam tabel Items, toh itu bukan tabel buat folder. Gue juga heran buat apa itu parent_id? Selama gue bikin folder, gak pernah berisi itu kolom. Buat kolom path dalam tabel item, mungkin masih bisa kita pake buat simpan path item/BOM, toh aku juga heran gimana loe ngesih alamat path pada item/BOM yang dimasukkan ke folder padahal sebelumnya belum ada kolom path/kolom pathnya null.
+
+
+6. 
 

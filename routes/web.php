@@ -46,7 +46,7 @@ Route::middleware(['auth'])->group(function () {
 
     // BARU: Aksi Cepat (Quick Actions) di Card
     Route::post('item/{item}/update-quantity', [ItemController::class, 'updateQuantity'])->name('item.update-quantity');
-    Route::post('item/{item}/move', [ItemController::class, 'move'])->name('item.move');
+    Route::post('inventory/move', [ItemController::class, 'move'])->name('item.move');
 
     // 3. Modul Folder & Hierarki
     Route::get('folders', [ItemController::class, 'folderIndex'])->name('folder.index');

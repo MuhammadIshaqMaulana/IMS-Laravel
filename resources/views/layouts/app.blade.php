@@ -80,10 +80,11 @@
     <div id="app-wrapper">
         @auth
         <nav id="main-nav">
-            <a href="{{ route('dashboard') }}" class="nav-link {{ Route::is('dashboard') ? 'active' : '' }}"><i class="fas fa-home"></i></a>
-            <a href="{{ route('item.index') }}" class="nav-link {{ Route::is('item.*') ? 'active' : '' }}"><i class="fas fa-boxes"></i></a>
-            <a href="{{ route('transaksi.index') }}" class="nav-link {{ Route::is('transaksi.*') ? 'active' : '' }}"><i class="fas fa-history"></i></a>
-            <a href="{{ route('laporan.stok-minimum') }}" class="nav-link"><i class="fas fa-bell"></i></a>
+            <a href="{{ route('dashboard') }}" class="nav-link {{ Route::is('dashboard') ? 'active' : '' }}" title="Dashboard"><i class="fas fa-home"></i></a>
+            <a href="{{ route('item.index') }}" class="nav-link {{ Route::is('item.*') ? 'active' : '' }}" title="Inventory"><i class="fas fa-boxes"></i></a>
+            <a href="{{ route('transaksi.index') }}" class="nav-link {{ Route::is('transaksi.*') ? 'active' : '' }}" title="History"><i class="fas fa-history"></i></a>
+            <a href="{{ route('laporan.stok-minimum') }}" class="nav-link" title="Alerts"><i class="fas fa-bell"></i></a>
+
             <div class="mt-auto">
                 <form action="{{ route('logout') }}" method="POST">@csrf
                     <button type="submit" class="btn btn-link nav-link"><i class="fas fa-sign-out-alt"></i></button>
@@ -92,52 +93,59 @@
         </nav>
 
         <div id="folder-sidebar">
-            <div class="sidebar-header"><h6 class="fw-bold m-0 text-muted small">FOLDERS</h6></div>
+            <div class="sidebar-header d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold m-0 text-muted small">NAVIGASI FOLDER</h6>
+                <a href="{{ route('item.index') }}" class="btn btn-link btn-sm p-0 text-dark" title="Refresh Tree"><i class="fas fa-sync-alt fa-xs"></i></a>
+            </div>
             <div class="folder-tree">
                 <a href="{{ route('item.index') }}" class="folder-item {{ !request('folder_id') ? 'active' : '' }}">
-                    <i class="fas fa-hdd me-2 opacity-50"></i> Root
+                    <i class="fas fa-hdd me-2 opacity-50"></i> Semua Item (Root)
                 </a>
-                @php $sidebarFolders = \App\Models\Item::where('tags', 'like', '%"folder"%')->orderBy('nama')->get(); @endphp
-                @foreach($sidebarFolders as $sf)
-                    <a href="{{ route('item.index', ['folder_id' => $sf->id]) }}"
-                       class="folder-item {{ request('folder_id') == $sf->id ? 'active' : '' }}">
-                        <i class="fas fa-folder me-2 text-warning"></i> {{ $sf->nama }}
-                    </a>
-                @endforeach
+
+                <hr class="my-2 mx-3 opacity-10">
+
+                @php
+                    // FIX: Ambil data folder langsung di sini jika tidak disediakan oleh controller
+                    $sidebarFolders = \App\Models\Folder::orderBy('nama')->get();
+
+                    $renderTree = function($folders, $parentId = null, $level = 0) use (&$renderTree) {
+                        $currentFolders = $folders->where('parent_id', $parentId);
+                        foreach ($currentFolders as $f) {
+                            $activeClass = request('folder_id') == $f->id ? 'active' : '';
+                            $padding = $level * 15 + 12;
+
+                            echo "<a href='".route('item.index', ['folder_id' => $f->id])."'
+                                     class='folder-item {$activeClass}'
+                                     style='padding-left: {$padding}px;'
+                                     title='{$f->nama}'>";
+                            echo "<i class='fas fa-folder me-2 ".($activeClass ? 'text-white' : 'text-warning')." opacity-75'></i>";
+                            echo "<span>{$f->nama}</span>";
+                            echo "</a>";
+
+                            $renderTree($folders, $f->id, $level + 1);
+                        }
+                    };
+                @endphp
+
+                {!! $renderTree($sidebarFolders, null) !!}
             </div>
         </div>
         <div id="resizer"></div>
         @endauth
 
         <main id="content-area">
-            <!-- Notifikasi Sukses -->
             @if(session('success'))
-                <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm" role="alert">
+                <div class="alert alert-success border-0 shadow-sm alert-dismissible fade show">
                     <i class="fas fa-check-circle me-2"></i> {{ session('success') }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             @endif
-
-            <!-- Notifikasi Error (INI YANG PENTING UNTUK GUARD FOLDER) -->
             @if(session('error'))
-                <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm" role="alert">
+                <div class="alert alert-danger border-0 shadow-sm alert-dismissible fade show">
                     <i class="fas fa-exclamation-circle me-2"></i> {{ session('error') }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             @endif
-
-            <!-- Error Validasi (Nama kosong, dll) -->
-            @if ($errors->any())
-                <div class="alert alert-danger alert-dismissible fade show border-0 shadow-sm">
-                    <ul class="mb-0">
-                        @foreach ($errors->all() as $error)
-                            <li>{{ $error }}</li>
-                        @endforeach
-                    </ul>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            @endif
-
             @yield('content')
         </main>
     </div>

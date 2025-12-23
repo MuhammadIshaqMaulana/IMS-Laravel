@@ -310,7 +310,7 @@ name: star crate ✨📦
 ! hover items navigation muncul tombol add item & add folder
 ! cegah user untuk close tab saat masih edit/create data
 ! apakah bisa undo edit massal?
-
+! Fitur Search secara umum dan filter. Mirip kayak tokped dan shopee, karena di sortly gaada serch umum.
 
 edit nama folder dan menambahkan tags
 
