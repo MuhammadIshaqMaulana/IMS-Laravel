@@ -13,7 +13,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class ItemController extends Controller
 {
     /**
-     * Tampilan Utama: Folder + Item + Search Global + Breadcrumbs.
+     * Menampilkan gabungan Folder dan Item dengan sistem pencarian dan navigasi.
      */
     public function index(Request $request)
     {
@@ -25,7 +25,7 @@ class ItemController extends Controller
         $itemQuery = Item::query();
 
         if ($search) {
-            // PENCARIAN GLOBAL
+            // Logika Pencarian Global
             $subFolders = $folderQuery->where('nama', 'LIKE', "%{$search}%")->orderBy('nama')->get();
             $items = $itemQuery->where(function($q) use ($search) {
                         $q->where('nama', 'LIKE', "%{$search}%")
@@ -34,39 +34,60 @@ class ItemController extends Controller
                     })->orderBy('nama')->paginate(15)->appends(['q' => $search]);
             $currentFolder = null;
         } else {
-            // NAVIGASI BIASA
+            // Logika Navigasi Folder
             if ($folderId) {
-                $currentFolder = Folder::with('parent')->findOrFail($folderId);
+                // Dual counter menggunakan withCount
+                $currentFolder = Folder::withCount(['children', 'items'])->findOrFail($folderId);
                 $breadcrumbs = $currentFolder->getBreadcrumbs();
-                $subFolders = Folder::where('parent_id', $folderId)->orderBy('nama')->get();
+                $subFolders = Folder::where('parent_id', $folderId)->withCount(['children', 'items'])->orderBy('nama')->get();
                 $items = Item::where('folder_id', $folderId)->orderBy('nama')->paginate(15)->appends(['folder_id' => $folderId]);
             } else {
                 $currentFolder = null;
-                $subFolders = Folder::whereNull('parent_id')->orderBy('nama')->get();
+                $subFolders = Folder::whereNull('parent_id')->withCount(['children', 'items'])->orderBy('nama')->get();
                 $items = Item::whereNull('folder_id')->orderBy('nama')->paginate(15);
             }
         }
 
         $allFolders = Folder::orderBy('nama')->get();
 
-        return view('item.index', compact('items', 'subFolders', 'currentFolder', 'allFolders', 'breadcrumbs', 'search'));
+        $materialIds = [];
+        foreach ($items as $item) {
+            if ($item->is_bom && is_array($item->materials)) {
+                foreach ($item->materials as $m) {
+                    $materialIds[] = $m['item_id'];
+                }
+            }
+        }
+        $materialMap = Item::whereIn('id', array_unique($materialIds))->pluck('nama', 'id');
+
+        return view('item.index', compact('items', 'subFolders', 'currentFolder', 'allFolders', 'breadcrumbs', 'search', 'materialMap'));
     }
 
     public function create()
     {
+        // Hanya item fisik (bukan BOM) yang bisa jadi bahan baku
         $allMaterials = Item::whereNull('materials')->orderBy('nama')->get();
         $allFolders = Folder::orderBy('nama')->get();
         return view('item.create', compact('allMaterials', 'allFolders'));
     }
 
+    /**
+     * Simpan Item/BOM/Folder dengan atau tanpa varian.
+     */
     public function store(Request $request)
     {
-        $request->validate(['nama' => 'required|string|max:100', 'type' => 'required|in:item,bom,folder']);
+        $request->validate([
+            'nama' => 'required|string|max:100',
+            'type' => 'required|in:item,folder',
+            'folder_id' => 'nullable|exists:folders,id'
+        ]);
+
         $folderId = $request->folder_id;
 
+        // Validasi duplikasi nama di lokasi yang sama
         if (Folder::where('nama', $request->nama)->where('parent_id', $folderId)->exists() ||
             Item::where('nama', $request->nama)->where('folder_id', $folderId)->exists()) {
-            return redirect()->back()->withInput()->with('error', "Gagal: Nama sudah ada di lokasi ini.");
+            return redirect()->back()->withInput()->with('error', "Gagal: Nama '{$request->nama}' sudah ada di lokasi ini.");
         }
 
         DB::beginTransaction();
@@ -75,18 +96,23 @@ class ItemController extends Controller
                 $folder = Folder::create(['nama' => $request->nama, 'parent_id' => $folderId]);
                 $folder->updatePath();
             } else {
+                $isBomActive = $request->is_bom === 'on';
+                $materials = $isBomActive ? json_decode($request->materials_data, true) : null;
                 $dimensions = json_decode($request->variant_dimensions, true) ?: [];
+
                 if (empty($dimensions)) {
-                    $this->createNewItem($request, $request->nama, $folderId);
+                    // Simpan Single Item/BOM
+                    $this->saveSingleItem($request, $request->nama, $folderId, $materials);
                 } else {
-                    $this->generateIndependentVariants($request, $dimensions, $folderId);
+                    // Simpan Varian (mendukung varian yang bersifat BOM)
+                    $this->generateVariantsWithMaterials($request, $dimensions, $folderId, $materials);
                 }
             }
             DB::commit();
-            return redirect()->route('item.index', ['folder_id' => $folderId])->with('success', 'Berhasil dibuat!');
+            return redirect()->route('item.index', ['folder_id' => $folderId])->with('success', 'Data berhasil dibuat!');
         } catch (\Exception $e) {
             DB::rollBack();
-            return redirect()->back()->withInput()->with('error', $e->getMessage());
+            return redirect()->back()->withInput()->with('error', 'Kesalahan: ' . $e->getMessage());
         }
     }
 
@@ -102,19 +128,26 @@ class ItemController extends Controller
 
     public function edit(Item $item)
     {
+        $allMaterials = Item::whereNull('materials')->where('id', '!=', $item->id)->orderBy('nama')->get();
         $allFolders = Folder::orderBy('nama')->get();
-        return view('item.edit', compact('item', 'allFolders'));
+        return view('item.edit', compact('item', 'allMaterials', 'allFolders'));
     }
 
+    /**
+     * Update dengan Logika Slider BOM (ON = hapus stok fisik, OFF = hapus resep).
+     */
     public function update(Request $request, Item $item)
     {
         $request->validate(['nama' => 'required|string|max:100']);
 
-        $oldStock = (float) $item->stok_saat_ini;
-        $newStock = (float) ($request->stok_saat_ini ?? 0);
+        $isBomActive = $request->is_bom === 'on';
+        $materials = $isBomActive ? json_decode($request->materials_data, true) : null;
 
-        if ($oldStock != $newStock) {
-            $this->logActivity($item->id, $newStock - $oldStock, 'Penyesuaian stok via edit item');
+        $oldStock = (float) $item->stok_saat_ini;
+        $newStock = $isBomActive ? 0 : (float) ($request->stok_saat_ini ?? 0);
+
+        if (!$isBomActive && $oldStock != $newStock) {
+            $this->logActivity($item->id, $newStock - $oldStock, 'Penyesuaian stok via edit');
         }
 
         $item->update([
@@ -125,48 +158,59 @@ class ItemController extends Controller
             'harga_jual' => floor($request->harga_jual ?? 0),
             'folder_id' => $request->folder_id,
             'note' => $request->note,
+            'materials' => $materials,
             'tags' => array_filter(array_map('trim', explode(',', $request->tags_input ?? ''))) ?: null,
         ]);
 
-        return redirect()->route('item.show', $item->id)->with('success', 'Item diperbarui.');
-    }
-
-    public function updateFolder(Request $request, Folder $folder)
-    {
-        $request->validate(['nama' => 'required|string|max:100']);
-        $folder->update(['nama' => $request->nama]);
-        return redirect()->back()->with('success', 'Folder diubah.');
-    }
-
-    public function move(Request $request)
-    {
-        $request->validate(['target_type' => 'required', 'id' => 'required', 'folder_id' => 'nullable']);
-        $targetId = $request->folder_id;
-
-        if ($request->target_type === 'folder') {
-            $folder = Folder::findOrFail($request->id);
-            if ($targetId && Folder::findOrFail($targetId)->isDescendantOf($folder->id)) {
-                return redirect()->back()->with('error', 'Gagal: Silsilah melingkar.');
-            }
-            $folder->update(['parent_id' => $targetId]);
-            $folder->updatePath();
-            $this->syncDescendantPaths($folder);
-        } else {
-            Item::where('id', $request->id)->update(['folder_id' => $targetId]);
-        }
-        return redirect()->back()->with('success', 'Pindah lokasi berhasil.');
-    }
-
-    public function updateQuantity(Request $request, Item $item)
-    {
-        $request->validate(['qty' => 'required|numeric']);
-        $item->increment('stok_saat_ini', $request->qty);
-        $this->logActivity($item->id, $request->qty, 'Update cepat (+/-)');
-        return redirect()->back()->with('success', 'Stok diupdate.');
+        return redirect()->route('item.show', $item->id)->with('success', 'Data diperbarui.');
     }
 
     /**
-     * LENGKAP: Bulk Update (Fields, Tags, Move).
+     * Fitur Massal: Clone dengan suffix '- copy'.
+     */
+    public function bulkClone(Request $request)
+    {
+        $itemIds = json_decode($request->selected_items, true);
+        if (empty($itemIds)) return redirect()->back()->with('error', 'Pilih item.');
+
+        DB::beginTransaction();
+        try {
+            foreach ($itemIds as $id) {
+                $original = Item::findOrFail($id);
+                $clone = $original->replicate();
+                $clone->nama = $original->nama . ' - copy';
+                if ($original->sku) $clone->sku = $this->generateUniqueSku($clone->nama);
+                $clone->save();
+            }
+            DB::commit();
+            return redirect()->back()->with('success', count($itemIds) . ' item berhasil diduplikasi.');
+        } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', 'Gagal clone.'); }
+    }
+
+    /**
+     * Fitur Massal: Update Kuantitas Relatif (+/-).
+     */
+    public function bulkUpdateQuantity(Request $request)
+    {
+        $itemIds = json_decode($request->selected_items, true);
+        $change = (float) $request->qty_adjustment;
+        if (empty($itemIds) || $change == 0) return redirect()->back()->with('error', 'Input tidak valid.');
+
+        DB::beginTransaction();
+        try {
+            foreach (Item::whereIn('id', $itemIds)->get() as $item) {
+                if (!$item->is_bom) {
+                    $item->increment('stok_saat_ini', $change);
+                    $this->logActivity($item->id, $change, 'Penyesuaian stok massal');
+                }
+            }
+            DB::commit();
+            return redirect()->back()->with('success', 'Stok ' . count($itemIds) . ' item berhasil disesuaikan.');
+        } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', 'Gagal.'); }
+    }
+
+    /**
+     * Fitur Massal: Edit Field Dasar.
      */
     public function bulkUpdate(Request $request)
     {
@@ -189,50 +233,70 @@ class ItemController extends Controller
                 }
             }
             DB::commit();
-            return redirect()->back()->with('success', count($itemIds) . ' item diupdate.');
+            return redirect()->back()->with('success', 'Perubahan massal berhasil.');
         } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', 'Gagal.'); }
     }
 
-    /**
-     * BARU: Bulk Clone Data.
-     */
-    public function bulkClone(Request $request)
-    {
-        $itemIds = json_decode($request->selected_items, true);
-        if (empty($itemIds)) return redirect()->back()->with('error', 'Pilih item.');
+    // --- INTERNAL HELPERS ---
 
-        DB::beginTransaction();
-        try {
-            foreach ($itemIds as $id) {
-                $original = Item::findOrFail($id);
-                $clone = $original->replicate();
-                $clone->nama = $original->nama . ' - copy';
-                if ($original->sku) $clone->sku = strtoupper(substr($clone->nama, 0, 3)) . '-' . strtoupper(Str::random(6));
-                $clone->save();
-            }
-            DB::commit();
-            return redirect()->back()->with('success', count($itemIds) . ' item berhasil di-clone.');
-        } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', 'Gagal clone.'); }
+    private function saveSingleItem($request, $name, $folderId, $materials)
+    {
+        $stokInput = (float) ($request->stok_saat_ini ?? 0);
+        $item = Item::create([
+            'nama' => $name,
+            'sku' => ($materials) ? 'BOM-' . strtoupper(Str::random(6)) : $this->generateUniqueSku($name),
+            'satuan' => $request->satuan ?? 'pcs',
+            'stok_saat_ini' => ($materials) ? 0 : $stokInput,
+            'stok_minimum' => $request->stok_minimum ?? 0,
+            'harga_jual' => floor($request->harga_jual ?? 0),
+            'folder_id' => $folderId,
+            'materials' => $materials,
+            'note' => $request->note,
+            'tags' => array_filter(array_map('trim', explode(',', $request->tags_input ?? ''))) ?: null,
+        ]);
+        if (!$materials && $stokInput > 0) $this->logActivity($item->id, $stokInput, 'Saldo awal');
     }
 
-    /**
-     * BARU: Bulk Quantity Adjustment.
-     */
-    public function bulkUpdateQuantity(Request $request)
+    private function generateVariantsWithMaterials($request, $dimensions, $folderId, $materials)
     {
-        $itemIds = json_decode($request->selected_items, true);
-        $change = (float) $request->qty_adjustment;
-        if (empty($itemIds) || $change == 0) return redirect()->back()->with('error', 'Input tidak valid.');
+        $combinations = $this->generateCombinations($dimensions);
+        foreach ($combinations as $combo) {
+            $name = $request->nama . ' - ' . implode(', ', $combo);
+            Item::create([
+                'nama' => $name,
+                'sku' => $this->generateUniqueSku($name),
+                'satuan' => $request->satuan ?? 'pcs',
+                'stok_saat_ini' => 0,
+                'stok_minimum' => $request->stok_minimum ?? 0,
+                'harga_jual' => floor($request->harga_jual ?? 0),
+                'folder_id' => $folderId,
+                'materials' => $materials,
+                'note' => "Varian dari " . $request->nama,
+                'tags' => array_filter(array_map('trim', explode(',', $request->tags_input ?? ''))) ?: null,
+            ]);
+        }
+    }
 
-        DB::beginTransaction();
-        try {
-            foreach (Item::whereIn('id', $itemIds)->get() as $item) {
-                $item->increment('stok_saat_ini', $change);
-                $this->logActivity($item->id, $change, 'Penyesuaian stok massal');
-            }
-            DB::commit();
-            return redirect()->back()->with('success', 'Stok ' . count($itemIds) . ' item diupdate.');
-        } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', 'Gagal.'); }
+    private function generateCombinations($dims, $idx = 0, $curr = []) {
+        if ($idx == count($dims)) return [$curr];
+        $res = [];
+        foreach (array_map('trim', explode(',', $dims[$idx]['options'])) as $opt) {
+            $next = $curr; $next[] = $opt; $res = array_merge($res, $this->generateCombinations($dims, $idx + 1, $next));
+        }
+        return $res;
+    }
+
+    private function generateUniqueSku($name) {
+        $prefix = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $name), 0, 3));
+        return $prefix . '-' . strtoupper(Str::random(6));
+    }
+
+    private function syncDescendantPaths(Folder $folder) {
+        foreach (Folder::where('path', 'LIKE', $folder->path . '%')->where('id', '!=', $folder->id)->get() as $desc) $desc->updatePath();
+    }
+
+    private function logActivity($itemId, $qty, $note) {
+        Transaksi::create(['item_id' => $itemId, 'jumlah_produksi' => $qty, 'tanggal_produksi' => now(), 'catatan' => $note]);
     }
 
     public function exportCsv() {
@@ -250,61 +314,24 @@ class ItemController extends Controller
         return view('item.export_pdf', compact('items'));
     }
 
-    public function destroy(Item $item) { $item->delete(); return redirect()->route('item.index')->with('success', 'Dihapus.'); }
+    public function move(Request $request) {
+        $targetId = $request->folder_id;
+        if ($request->target_type === 'folder') {
+            $folder = Folder::findOrFail($request->id);
+            if ($targetId && Folder::findOrFail($targetId)->isDescendantOf($folder->id)) return redirect()->back()->with('error', 'Silsilah melingkar.');
+            $folder->update(['parent_id' => $targetId]);
+            $folder->updatePath();
+            $this->syncDescendantPaths($folder);
+        } else {
+            Item::where('id', $request->id)->update(['folder_id' => $targetId]);
+        }
+        return redirect()->back()->with('success', 'Lokasi dipindahkan.');
+    }
 
+    public function updateFolder(Request $request, Folder $folder) { $folder->update(['nama' => $request->nama]); return redirect()->back()->with('success', 'Nama folder diubah.'); }
+    public function destroy(Item $item) { $item->delete(); return redirect()->route('item.index')->with('success', 'Item dihapus.'); }
     public function destroyFolder(Folder $folder) {
         if ($folder->children()->exists() || $folder->items()->exists()) return redirect()->back()->with('error', 'Folder tidak kosong.');
         $folder->delete(); return redirect()->back()->with('success', 'Folder dihapus.');
-    }
-
-    // --- HELPERS ---
-    private function createNewItem($request, $name, $folderId) {
-        $item = Item::create([
-            'nama' => $name,
-            'sku' => ($request->type === 'bom') ? 'BOM-' . strtoupper(Str::random(6)) : $this->generateUniqueSku($name),
-            'satuan' => $request->satuan ?? 'pcs',
-            'stok_saat_ini' => $request->stok_saat_ini ?? 0,
-            'stok_minimum' => $request->stok_minimum ?? 0,
-            'harga_jual' => floor($request->harga_jual ?? 0),
-            'folder_id' => $folderId,
-            'materials' => ($request->type === 'bom') ? json_decode($request->materials_data, true) : null,
-            'note' => $request->note,
-            'tags' => array_filter(array_map('trim', explode(',', $request->tags_input ?? ''))) ?: null,
-        ]);
-        if ($request->stok_saat_ini > 0) $this->logActivity($item->id, $request->stok_saat_ini, 'Saldo awal');
-    }
-
-    private function generateIndependentVariants($request, $dimensions, $folderId) {
-        $combinations = $this->generateCombinations($dimensions);
-        foreach ($combinations as $combo) {
-            $name = $request->nama . ' - ' . implode(', ', $combo);
-            Item::create([
-                'nama' => $name, 'sku' => $this->generateUniqueSku($name), 'satuan' => $request->satuan ?? 'pcs',
-                'stok_saat_ini' => 0, 'stok_minimum' => $request->stok_minimum ?? 0, 'harga_jual' => floor($request->harga_jual ?? 0),
-                'folder_id' => $folderId, 'tags' => array_filter(array_map('trim', explode(',', $request->tags_input ?? ''))) ?: null,
-            ]);
-        }
-    }
-
-    private function generateCombinations($dims, $idx = 0, $curr = []) {
-        if ($idx == count($dims)) return [$curr];
-        $res = [];
-        foreach (array_map('trim', explode(',', $dims[$idx]['options'])) as $opt) {
-            $next = $curr; $next[] = $opt; $res = array_merge($res, $this->generateCombinations($dims, $idx + 1, $next));
-        }
-        return $res;
-    }
-
-    private function syncDescendantPaths(Folder $folder) {
-        foreach (Folder::where('path', 'LIKE', $folder->path . '%')->where('id', '!=', $folder->id)->get() as $desc) $desc->updatePath();
-    }
-
-    private function logActivity($itemId, $qty, $note) {
-        Transaksi::create(['item_id' => $itemId, 'jumlah_produksi' => $qty, 'tanggal_produksi' => now(), 'catatan' => $note]);
-    }
-
-    private function generateUniqueSku($name) {
-        $sku = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $name), 0, 3)) . '-' . strtoupper(Str::random(6));
-        return Item::where('sku', $sku)->exists() ? $this->generateUniqueSku($name) : $sku;
     }
 }

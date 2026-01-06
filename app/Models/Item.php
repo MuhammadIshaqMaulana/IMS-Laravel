@@ -12,7 +12,7 @@ class Item extends Model
 
     protected $fillable = [
         'nama', 'sku', 'satuan', 'stok_saat_ini', 'stok_minimum',
-        'harga_jual', 'pemasok', 'note', 'tags', 'custom_fields',
+        'harga_jual', 'harga_beli', 'pemasok', 'note', 'tags', 'custom_fields',
         'image_link', 'materials', 'folder_id'
     ];
 
@@ -23,6 +23,7 @@ class Item extends Model
         'stok_saat_ini' => 'float',
         'stok_minimum' => 'float',
         'harga_jual' => 'integer',
+        'harga_beli' => 'integer',
     ];
 
     protected $appends = ['calculated_stock', 'is_bom'];

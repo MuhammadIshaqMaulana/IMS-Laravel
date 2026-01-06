@@ -1,39 +1,33 @@
 @extends('layouts.app')
-@section('title', 'Tambah Baru')
+@section('title', 'Tambah Inventaris')
 @section('content')
 <div class="row justify-content-center">
     <div class="col-lg-10">
         <form action="{{ route('item.store') }}" method="POST" id="mainForm">
             @csrf
-            <h3 class="fw-bold mb-4">Buat Entitas Baru</h3>
+            <h3 class="fw-bold mb-4">Tambah Entitas Baru</h3>
 
+            <!-- RADIO PILIHAN TIPE UTAMA -->
             <div class="card border-0 shadow-sm mb-4 p-4">
-                <!-- Type Selection -->
-                <div class="mb-4">
-                    <label class="form-label fw-bold">Pilih Tipe</label>
-                    <div class="row g-2 text-center">
-                        <div class="col-4">
-                            <input type="radio" class="btn-check" name="type" id="type_item" value="item" checked>
-                            <label class="btn btn-outline-secondary w-100 p-3" for="type_item"><i class="fas fa-box d-block mb-2"></i> Item</label>
-                        </div>
-                        <div class="col-4">
-                            <input type="radio" class="btn-check" name="type" id="type_bom" value="bom">
-                            <label class="btn btn-outline-primary w-100 p-3" for="type_bom"><i class="fas fa-layer-group d-block mb-2"></i> BOM</label>
-                        </div>
-                        <div class="col-4">
-                            <input type="radio" class="btn-check" name="type" id="type_folder" value="folder">
-                            <label class="btn btn-outline-warning w-100 p-3" for="type_folder"><i class="fas fa-folder d-block mb-2"></i> Folder</label>
-                        </div>
+                <label class="form-label fw-bold">Tipe Entitas</label>
+                <div class="row g-2 text-center mb-4">
+                    <div class="col-6">
+                        <input type="radio" class="btn-check" name="type" id="type_item" value="item" checked>
+                        <label class="btn btn-outline-primary w-100 p-3 fw-bold" for="type_item"><i class="fas fa-box d-block mb-2"></i> Inventaris (Item / BOM)</label>
+                    </div>
+                    <div class="col-6">
+                        <input type="radio" class="btn-check" name="type" id="type_folder" value="folder">
+                        <label class="btn btn-outline-warning w-100 p-3 fw-bold" for="type_folder"><i class="fas fa-folder d-block mb-2"></i> Folder Penyimpanan</label>
                     </div>
                 </div>
 
                 <div class="row">
                     <div class="col-md-8 mb-3">
-                        <label class="form-label">Nama <span class="text-danger">*</span></label>
+                        <label class="form-label fw-bold">Nama <span class="text-danger">*</span></label>
                         <input type="text" name="nama" class="form-control form-control-lg" required>
                     </div>
                     <div class="col-md-4 mb-3">
-                        <label class="form-label">Add to Folder</label>
+                        <label class="form-label fw-bold">Lokasi Folder</label>
                         <select name="folder_id" class="form-select form-select-lg">
                             <option value="">(Root)</option>
                             @foreach($allFolders as $f)
@@ -43,44 +37,43 @@
                     </div>
                 </div>
 
-                <div id="standard_fields" class="row">
-                    <div class="col-md-3 mb-3"><label class="form-label">Satuan</label><input type="text" name="satuan" class="form-control" placeholder="pcs, kg"></div>
-                    <div class="col-md-3 mb-3" id="qty_group"><label class="form-label">Stok Awal</label><input type="number" name="stok_saat_ini" class="form-control" value="0"></div>
-                    <div class="col-md-3 mb-3"><label class="form-label">Stok Minimum (Restored)</label><input type="number" name="stok_minimum" class="form-control" value="0"></div>
-                    <div class="col-md-3 mb-3"><label class="form-label">Harga @</label><input type="number" name="harga_jual" class="form-control" value="0"></div>
-                </div>
-
-                <!-- Tags Input (Restored) -->
-                <div class="mb-3">
-                    <label class="form-label">Tags (Pisahkan dengan koma)</label>
-                    <input type="text" name="tags_input" class="form-control" placeholder="cth: bahan_baku, impor, promo">
-                </div>
-
-                <!-- BOM SECTION (Restored JS) -->
-                <div id="bom_section" style="display: none;" class="bg-light p-3 rounded mb-3 border">
-                    <h6 class="fw-bold mb-3">Material Penyusun (BOM)</h6>
-                    <div id="bom_rows"></div>
-                    <button type="button" class="btn btn-sm btn-primary mt-2" id="add_material_btn"><i class="fas fa-plus"></i> Tambah Material</button>
-                    <input type="hidden" name="materials_data" id="materials_data">
-                </div>
-
-                <!-- VARIANT SECTION (Restored JS) -->
-                <div id="variant_toggle_container" class="mb-3">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="has_variants">
-                        <label class="form-check-label">Buat Varian (Warna, Ukuran, dsb)</label>
+                <!-- FORM KHUSUS ITEM / BOM -->
+                <div id="item_exclusive_fields">
+                    <div class="form-check form-switch mb-4 p-3 bg-light border rounded">
+                        <input class="form-check-input ms-0 me-2" type="checkbox" name="is_bom" id="is_bom">
+                        <label class="form-check-label fw-bold text-primary" for="is_bom"><i class="fas fa-layer-group me-1"></i> Aktifkan Mode BOM (Item ini hasil produksi dari bahan lain)</label>
                     </div>
-                </div>
-                <div id="variant_section" style="display: none;" class="bg-light p-3 rounded mb-3 border">
-                    <h6 class="fw-bold mb-3">Dimensi Varian</h6>
-                    <div id="variant_rows"></div>
-                    <button type="button" class="btn btn-sm btn-success mt-2" id="add_variant_btn"><i class="fas fa-plus"></i> Tambah Dimensi</button>
-                    <input type="hidden" name="variant_dimensions" id="variant_dimensions">
-                </div>
 
-                <div class="mt-3"><label class="form-label">Catatan</label><textarea name="note" class="form-control" rows="2"></textarea></div>
+                    <div class="row">
+                        <div class="col-md-3 mb-3"><label class="form-label small fw-bold">Satuan</label><input type="text" name="satuan" class="form-control" placeholder="pcs, kg"></div>
+                        <div class="col-md-3 mb-3" id="qty_group"><label class="form-label small fw-bold text-primary">Stok Awal</label><input type="number" name="stok_saat_ini" class="form-control border-primary" value="0"></div>
+                        <div class="col-md-3 mb-3"><label class="form-label small fw-bold">Stok Minimum</label><input type="number" name="stok_minimum" class="form-control" value="0"></div>
+                        <div class="col-md-3 mb-3"><label class="form-label small fw-bold">Harga Jual (Rp)</label><input type="number" name="harga_jual" class="form-control" value="0"></div>
+                    </div>
+
+                    <div id="bom_section" style="display: none;" class="bg-primary-subtle p-3 rounded mb-3 border border-primary-subtle">
+                        <h6 class="fw-bold mb-3 text-primary"><i class="fas fa-list me-2"></i> Komponen Material (Resep BOM)</h6>
+                        <div id="bom_rows"></div>
+                        <button type="button" class="btn btn-sm btn-primary mt-2" id="add_material_btn"><i class="fas fa-plus"></i> Tambah Bahan Baku</button>
+                        <input type="hidden" name="materials_data" id="materials_data">
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="has_variants">
+                        <label class="form-check-label fw-bold">Item ini memiliki varian</label>
+                    </div>
+                    <div id="variant_section" style="display: none;" class="bg-light p-3 rounded mb-3 border">
+                        <h6 class="fw-bold mb-3">Dimensi Varian</h6>
+                        <div id="variant_rows"></div>
+                        <button type="button" class="btn btn-sm btn-success mt-2" id="add_variant_btn"><i class="fas fa-plus"></i> Tambah Dimensi</button>
+                        <input type="hidden" name="variant_dimensions" id="variant_dimensions">
+                    </div>
+
+                    <div class="mb-3"><label class="form-label small fw-bold">Tags</label><input type="text" name="tags_input" class="form-control" placeholder="roti, promo"></div>
+                    <div class="mb-3"><label class="form-label small fw-bold">Catatan</label><textarea name="note" class="form-control" rows="2"></textarea></div>
+                </div>
             </div>
-            <button type="submit" class="btn btn-primary btn-lg w-100" id="btnSubmit">Simpan Sekarang</button>
+            <button type="submit" class="btn btn-primary btn-lg w-100 shadow-sm" id="btnSubmit">Simpan Sekarang</button>
         </form>
     </div>
 </div>
@@ -88,64 +81,60 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const types = document.querySelectorAll('input[name="type"]');
-        const updateUI = () => {
-            const val = document.querySelector('input[name="type"]:checked').value;
-            document.getElementById('standard_fields').style.display = val === 'folder' ? 'none' : 'flex';
-            document.getElementById('bom_section').style.display = val === 'bom' ? 'block' : 'none';
-            document.getElementById('qty_group').style.display = val === 'bom' ? 'none' : 'block';
-            document.getElementById('variant_toggle_container').style.display = val === 'item' ? 'block' : 'none';
-        };
-        types.forEach(t => t.addEventListener('change', updateUI));
+        const itemFields = document.getElementById('item_exclusive_fields');
+        const isBom = document.getElementById('is_bom');
+        const bomSection = document.getElementById('bom_section');
+        const qtyGroup = document.getElementById('qty_group');
+        const hasVariants = document.getElementById('has_variants');
+        const variantSection = document.getElementById('variant_section');
 
-        // BOM Logic
+        // Logic Tipe Utama (Item vs Folder)
+        types.forEach(t => t.addEventListener('change', () => {
+            itemFields.style.display = t.value === 'folder' ? 'none' : 'block';
+        }));
+
+        // Logic BOM
+        isBom.addEventListener('change', () => {
+            bomSection.style.display = isBom.checked ? 'block' : 'none';
+            qtyGroup.style.display = isBom.checked ? 'none' : 'block';
+            if(isBom.checked) document.querySelector('input[name="stok_saat_ini"]').value = 0;
+        });
+
+        // Logic Varian
+        hasVariants.addEventListener('change', () => { variantSection.style.display = hasVariants.checked ? 'block' : 'none'; });
+
+        // Add BOM Row
         const bomRows = document.getElementById('bom_rows');
         document.getElementById('add_material_btn').addEventListener('click', () => {
-            const div = document.createElement('div');
-            div.className = 'row g-2 mb-2 material-row';
-            div.innerHTML = `
-                <div class="col-7"><select class="form-select mat-id">@foreach($allMaterials as $m)<option value="{{$m->id}}">{{$m->nama}}</option>@endforeach</select></div>
-                <div class="col-3"><input type="number" class="form-control mat-qty" placeholder="Qty"></div>
-                <div class="col-2"><button type="button" class="btn btn-danger w-100" onclick="this.parentElement.parentElement.remove()">&times;</button></div>`;
+            const div = document.createElement('div'); div.className = 'row g-2 mb-2 material-row';
+            div.innerHTML = `<div class="col-7"><select class="form-select mat-id shadow-sm">@foreach($allMaterials as $m)<option value="{{$m->id}}">{{$m->nama}}</option>@endforeach</select></div>
+                <div class="col-3"><input type="number" step="0.01" class="form-control mat-qty shadow-sm" placeholder="Qty"></div>
+                <div class="col-2"><button type="button" class="btn btn-danger w-100" onclick="this.parentElement.parentElement.remove()"><i class="fas fa-times"></i></button></div>`;
             bomRows.appendChild(div);
         });
 
-        // Variant Logic
+        // Add Variant Row
         const variantRows = document.getElementById('variant_rows');
-        const hasVariants = document.getElementById('has_variants');
-        hasVariants.addEventListener('change', () => {
-            document.getElementById('variant_section').style.display = hasVariants.checked ? 'block' : 'none';
-            document.getElementById('qty_group').style.display = hasVariants.checked ? 'none' : 'block';
-        });
         document.getElementById('add_variant_btn').addEventListener('click', () => {
-            const div = document.createElement('div');
-            div.className = 'row g-2 mb-2 variant-row';
-            div.innerHTML = `
-                <div class="col-5"><input type="text" class="form-control var-name" placeholder="Cth: Ukuran"></div>
-                <div class="col-5"><input type="text" class="form-control var-options" placeholder="S, M, L"></div>
-                <div class="col-2"><button type="button" class="btn btn-danger w-100" onclick="this.parentElement.parentElement.remove()">&times;</button></div>`;
+            const div = document.createElement('div'); div.className = 'row g-2 mb-2 variant-row';
+            div.innerHTML = `<div class="col-5"><input type="text" class="form-control var-name shadow-sm" placeholder="Ukuran"></div>
+                <div class="col-5"><input type="text" class="form-control var-options shadow-sm" placeholder="S, M, L"></div>
+                <div class="col-2"><button type="button" class="btn btn-danger w-100" onclick="this.parentElement.parentElement.remove()"><i class="fas fa-times"></i></button></div>`;
             variantRows.appendChild(div);
         });
 
-        // Final Submit Packing
-        document.getElementById('btnSubmit').addEventListener('click', (e) => {
-            // Pack BOM
+        // Final Submit
+        document.getElementById('btnSubmit').addEventListener('click', () => {
             const mats = [];
-            document.querySelectorAll('.material-row').forEach(r => {
-                mats.push({ item_id: r.querySelector('.mat-id').value, qty: r.querySelector('.mat-qty').value });
-            });
+            document.querySelectorAll('.material-row').forEach(r => mats.push({ item_id: r.querySelector('.mat-id').value, qty: r.querySelector('.mat-qty').value }));
             document.getElementById('materials_data').value = JSON.stringify(mats);
 
-            // Pack Variants
             const vars = [];
             if(hasVariants.checked) {
-                document.querySelectorAll('.variant-row').forEach(r => {
-                    vars.push({ name: r.querySelector('.var-name').value, options: r.querySelector('.var-options').value });
-                });
+                document.querySelectorAll('.variant-row').forEach(r => vars.push({ name: r.querySelector('.var-name').value, options: r.querySelector('.var-options').value }));
             }
             document.getElementById('variant_dimensions').value = JSON.stringify(vars);
         });
-
-        updateUI();
     });
 </script>
 @endsection
