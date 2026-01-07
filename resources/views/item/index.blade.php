@@ -4,7 +4,7 @@
 
 @section('content')
 <div class="h-100 d-flex flex-column">
-    <!-- ATAS: BREADCRUMBS & PENCARIAN -->
+    <!-- ATAS: BREADCRUMBS & PENCARIAN GLOBAL -->
     <div class="mb-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <nav aria-label="breadcrumb">
@@ -25,24 +25,28 @@
                 </ol>
             </nav>
 
+            <!-- FORM PENCARIAN GLOBAL -->
             <form action="{{ route('item.index') }}" method="GET" class="d-flex" style="width: 320px;">
                 <div class="input-group input-group-sm shadow-sm">
                     <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
-                    <input type="text" name="q" class="form-control border-start-0 shadow-none" placeholder="Cari..." value="{{ $search }}">
+                    <input type="text" name="q" class="form-control border-start-0 shadow-none" placeholder="Cari nama, SKU, atau tag..." value="{{ $search }}">
                 </div>
             </form>
         </div>
 
         <div class="d-flex justify-content-between align-items-center">
             <h2 class="fw-bold m-0 text-dark">
+                <i class="fas {{ $currentFolder ? 'fa-folder-open text-warning' : 'fa-boxes text-brown' }} me-2"></i>
                 {{ $currentFolder ? $currentFolder->nama : 'Inventaris Utama' }}
             </h2>
             <div class="d-flex gap-2">
                 <div class="dropdown shadow-sm">
-                    <button class="btn btn-outline-dark dropdown-toggle fw-bold" type="button" data-bs-toggle="dropdown">Export</button>
+                    <button class="btn btn-outline-dark dropdown-toggle fw-bold" type="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-file-export me-2"></i> Export
+                    </button>
                     <ul class="dropdown-menu dropdown-menu-end border-0 shadow">
-                        <li><a class="dropdown-item" href="{{ route('item.export.csv') }}"><i class="fas fa-file-csv me-2 text-success"></i> CSV</a></li>
-                        <li><a class="dropdown-item" href="{{ route('item.export.pdf') }}" target="_blank"><i class="fas fa-file-pdf me-2 text-danger"></i> PDF</a></li>
+                        <li><a class="dropdown-item" href="{{ route('item.export.csv') }}"><i class="fas fa-file-csv me-2 text-success"></i> CSV Data</a></li>
+                        <li><a class="dropdown-item" href="{{ route('item.export.pdf') }}" target="_blank"><i class="fas fa-file-pdf me-2 text-danger"></i> PDF (Cetak)</a></li>
                     </ul>
                 </div>
                 <a href="{{ route('item.create', ['folder_id' => request('folder_id')]) }}" class="btn btn-primary px-4 fw-bold shadow-sm">
@@ -63,17 +67,23 @@
                 <span id="selectedCount" class="fw-bold small badge bg-warning text-dark px-2 py-1">0 Selected</span>
             </div>
             <div class="d-flex gap-2">
-                <button class="btn btn-sm btn-info text-white fw-bold shadow-sm px-3" onclick="openBulkQtyModal()"><i class="fas fa-plus-minus me-1"></i> Stok</button>
-                <button class="btn btn-sm btn-success fw-bold shadow-sm px-3" onclick="openBulkCloneModal()"><i class="fas fa-copy me-1"></i> Clone</button>
-                <button class="btn btn-sm btn-warning fw-bold shadow-sm px-3" onclick="openBulkModal()"><i class="fas fa-edit me-1"></i> Edit Data</button>
+                <button class="btn btn-sm btn-info text-white fw-bold shadow-sm px-3" onclick="openBulkQtyModal()">
+                    <i class="fas fa-plus-minus me-1"></i> Stok
+                </button>
+                <button class="btn btn-sm btn-success fw-bold shadow-sm px-3" onclick="openBulkCloneModal()">
+                    <i class="fas fa-copy me-1"></i> Clone
+                </button>
+                <button class="btn btn-sm btn-warning fw-bold shadow-sm px-3" onclick="openBulkModal()">
+                    <i class="fas fa-edit me-1"></i> Edit Data
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- GRID INVENTARIS -->
-    <div class="row overflow-y-auto flex-grow-1 g-4 pb-5">
+    <!-- GRID UTAMA -->
+    <div class="row overflow-y-auto flex-grow-1 g-4 pb-5" id="inventoryGrid">
 
-        <!-- FOLDERS -->
+        <!-- 1. FOLDER CARD DENGAN DUAL COUNTER -->
         @foreach($subFolders as $folder)
         <div class="col-xl-3 col-lg-4 col-md-6">
             <div class="card h-100 border-0 shadow-sm item-card">
@@ -84,37 +94,44 @@
                     <div class="card-body p-3 text-center">
                         <h6 class="card-title text-truncate fw-bold mb-1">{{ $folder->nama }}</h6>
                         <div class="d-flex justify-content-center gap-2">
-                            <span class="badge bg-light text-muted border fw-normal"><i class="fas fa-folder-open me-1 text-warning"></i> {{ $folder->children_count }}</span>
-                            <span class="badge bg-light text-muted border fw-normal"><i class="fas fa-box me-1 text-secondary"></i> {{ $folder->items_count }}</span>
+                            <span class="badge bg-light text-muted border fw-normal" title="Sub-folder">
+                                <i class="fas fa-folder-open me-1 text-warning"></i> {{ $folder->children_count }}
+                            </span>
+                            <span class="badge bg-light text-muted border fw-normal" title="Item Fisik">
+                                <i class="fas fa-box me-1 text-secondary"></i> {{ $folder->items_count }}
+                            </span>
                         </div>
                     </div>
                 </a>
                 <div class="card-footer bg-white border-0 pt-0 pb-3 px-3 d-flex gap-2">
-                    <button class="btn btn-outline-light btn-sm flex-grow-1 border text-dark shadow-sm" onclick="openEditFolderModal({{ $folder->id }}, '{{ $folder->nama }}')"><i class="fas fa-pen"></i></button>
-                    <button class="btn btn-outline-light btn-sm flex-grow-1 border text-dark shadow-sm" onclick="openMoveModal('folder', {{ $folder->id }}, '{{ $folder->nama }}')"><i class="fas fa-external-link-alt"></i></button>
+                    <button class="btn btn-outline-light btn-sm flex-grow-1 border text-dark shadow-sm" onclick="openEditFolderModal({{ $folder->id }}, '{{ $folder->nama }}')" title="Ubah Nama Folder">
+                        <i class="fas fa-pen"></i>
+                    </button>
+                    <button class="btn btn-outline-light btn-sm flex-grow-1 border text-dark shadow-sm" onclick="openMoveModal('folder', {{ $folder->id }}, '{{ $folder->nama }}')" title="Pindahkan Folder">
+                        <i class="fas fa-external-link-alt"></i>
+                    </button>
                 </div>
             </div>
         </div>
         @endforeach
 
-        <!-- ITEMS -->
+        <!-- 2. ITEM CARD (DENGAN BOM PREVIEW & HARGA BELI) -->
         @foreach($items as $item)
         <div class="col-xl-3 col-lg-4 col-md-6">
             <div class="card h-100 border-0 shadow-sm item-card position-relative">
                 <div class="position-absolute top-0 start-0 p-2 z-3">
-                    <input class="form-check-input item-checkbox" type="checkbox" data-item-id="{{ $item->id }}" style="width: 1.2rem; height: 1.2rem; cursor: pointer;">
+                    <input class="form-check-input item-checkbox shadow-none" type="checkbox" data-item-id="{{ $item->id }}" style="width: 1.2rem; height: 1.2rem; cursor: pointer;">
                 </div>
 
                 <a href="{{ route('item.show', $item->id) }}" class="text-decoration-none text-dark h-100 d-flex flex-column">
                     <div class="card-img-top bg-light d-flex align-items-center justify-content-center overflow-hidden" style="height: 140px;">
                         @if($item->image_link)
-                            <img src="{{ $item->image_link }}" class="w-100 h-100 object-fit-cover">
+                            <img src="{{ $item->image_link }}" class="w-100 h-100 object-fit-cover" onerror="this.src='https://placehold.co/400x300?text=No+Image'">
                         @else
                             <i class="fas {{ $item->is_bom ? 'fa-layer-group text-primary' : 'fa-box text-secondary' }} fa-4x opacity-20"></i>
                         @endif
                     </div>
                     <div class="card-body p-3">
-                        <!-- Judul & BOM Badge -->
                         <div class="d-flex justify-content-between align-items-start mb-1">
                             <h6 class="card-title text-truncate fw-bold mb-0 flex-grow-1 text-dark">{{ $item->nama }}</h6>
                             @if($item->is_bom)
@@ -130,20 +147,19 @@
                                 @endforeach
                             @endif
                             @if($item->note)
-                                <i class="fas fa-sticky-note text-warning ms-auto small" title="{{ $item->note }}" data-bs-toggle="tooltip"></i>
+                                <i class="fas fa-sticky-note text-warning ms-auto small shadow-sm" title="{{ $item->note }}" data-bs-toggle="tooltip"></i>
                             @endif
                         </div>
 
-                        <!-- BOM MATERIALS PREVIEW (Menggunakan Nama dari materialMap) -->
+                        <!-- BOM MATERIALS PREVIEW (NAMA BAHAN) -->
                         @if($item->is_bom && is_array($item->materials))
                             <div class="bg-light rounded p-2 mb-2 border border-light-subtle">
-                                <small class="text-muted d-block fw-bold mb-1" style="font-size: 0.6rem; text-transform: uppercase;">Resep Material:</small>
+                                <small class="text-muted d-block fw-bold mb-1" style="font-size: 0.6rem; text-transform: uppercase;">Komponen Material:</small>
                                 <div class="d-flex flex-column gap-1">
                                     @foreach(array_slice($item->materials, 0, 3) as $m)
                                         <div class="d-flex justify-content-between small text-truncate" style="font-size: 0.65rem; color: #555;">
-                                            <!-- MENGGUNAKAN NAMA DARI MAP -->
                                             <span>• {{ $materialMap[$m['item_id']] ?? 'Item #'.$m['item_id'] }}</span>
-                                            <span class="fw-bold">x{{ $m['qty'] }}</span>
+                                            <span class="fw-bold text-muted">x{{ $m['qty'] }}</span>
                                         </div>
                                     @endforeach
                                     @if(count($item->materials) > 3)
@@ -153,7 +169,7 @@
                             </div>
                         @endif
 
-                        <!-- Stok & Harga -->
+                        <!-- Stok & Info Harga Ganda -->
                         <div class="d-flex justify-content-between align-items-end mt-2">
                             <div>
                                 <span class="badge {{ $item->calculated_stock <= $item->stok_minimum ? 'bg-danger' : 'bg-success-subtle text-success' }} border shadow-sm">
@@ -164,22 +180,22 @@
                                 @endif
                             </div>
                             <div class="text-end">
-                                <small class="text-muted d-block" style="font-size: 0.6rem;">Harga Jual</small>
-                                <span class="fw-bold text-dark" style="font-size: 0.85rem;">Rp{{ number_format($item->harga_jual, 0) }}</span>
+                                <small class="text-muted d-block" style="font-size: 0.55rem; line-height: 1;">Beli: Rp{{ number_format($item->harga_beli, 0) }}</small>
+                                <span class="fw-bold text-dark" style="font-size: 0.85rem;">Jual: Rp{{ number_format($item->harga_jual, 0) }}</span>
                             </div>
                         </div>
                     </div>
                 </a>
                 <div class="card-footer bg-white border-0 pt-0 pb-3 px-3 d-flex gap-2">
-                    <button class="btn btn-outline-light btn-sm flex-grow-1 border text-dark shadow-sm" onclick="openMoveModal('item', {{ $item->id }}, '{{ $item->nama }}')"><i class="fas fa-external-link-alt"></i></button>
-                    <button class="btn btn-outline-light btn-sm flex-grow-1 border text-dark shadow-sm" onclick="openQtyModal({{ $item->id }}, '{{ $item->nama }}')"><i class="fas fa-plus-minus"></i></button>
+                    <button class="btn btn-outline-light btn-sm flex-grow-1 border text-dark shadow-sm" onclick="openMoveModal('item', {{ $item->id }}, '{{ $item->nama }}')" title="Pindahkan Item"><i class="fas fa-external-link-alt"></i></button>
+                    <button class="btn btn-outline-light btn-sm flex-grow-1 border text-dark shadow-sm" onclick="openQtyModal({{ $item->id }}, '{{ $item->nama }}')" title="Update Stok Cepat"><i class="fas fa-plus-minus"></i></button>
                 </div>
             </div>
         </div>
         @endforeach
     </div>
 
-    <!-- PAGINASI -->
+    <!-- PAGINASI (FIX OVERLAP) -->
     <div class="mt-4 pagination-wrapper">
         {{ $items->appends(request()->query())->links() }}
     </div>
@@ -226,28 +242,40 @@
     document.addEventListener('DOMContentLoaded', function() {
         const checks = document.querySelectorAll('.item-checkbox');
         const bulkBar = document.getElementById('bulkActions');
+        const countSpan = document.getElementById('selectedCount');
         const selectAll = document.getElementById('selectAllItems');
+
         function updateUI() {
             const count = document.querySelectorAll('.item-checkbox:checked').length;
             bulkBar.style.display = count > 0 ? 'block' : 'none';
-            document.getElementById('selectedCount').textContent = `${count} Selected`;
+            countSpan.textContent = `${count} Selected`;
             selectAll.checked = count === checks.length && checks.length > 0;
         }
+
         checks.forEach(c => c.addEventListener('change', updateUI));
+
         selectAll.addEventListener('change', function() {
             checks.forEach(c => c.checked = this.checked);
             updateUI();
         });
+
+        // Initialize Tooltips
         const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
         tooltipTriggerList.map(function (tooltipTriggerEl) { return new bootstrap.Tooltip(tooltipTriggerEl); });
     });
 </script>
 
 <style>
-    .item-card { transition: all 0.2s cubic-bezier(.4,0,.2,1); border: 1px solid #f0f0f0 !important; }
+    /* Card Styling */
+    .item-card { transition: all 0.25s cubic-bezier(.4,0,.2,1); border: 1px solid #f0f0f0 !important; }
     .item-card:hover { transform: translateY(-5px); border-color: #895129 !important; box-shadow: 0 15px 25px -5px rgba(0,0,0,0.1) !important; }
+
+    /* Breadcrumb */
     .breadcrumb-item + .breadcrumb-item::before { content: "›"; font-size: 1.5rem; vertical-align: middle; line-height: 10px; color: #ddd; }
+
+    /* Pagination Fix */
     .pagination-wrapper nav { display: flex; justify-content: center; }
-    .pagination-wrapper svg { width: 20px; height: 20px; }
+    .pagination-wrapper svg { width: 20px; height: 20px; vertical-align: middle; }
+    .pagination-wrapper nav > div:first-child { display: none; } /* Hide "Showing X to Y" */
 </style>
 @endsection

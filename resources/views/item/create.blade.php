@@ -44,11 +44,28 @@
                         <label class="form-check-label fw-bold text-primary" for="is_bom"><i class="fas fa-layer-group me-1"></i> Aktifkan Mode BOM (Item ini hasil produksi dari bahan lain)</label>
                     </div>
 
+                    <!-- Bagian Input Harga di Create & Edit -->
                     <div class="row">
-                        <div class="col-md-3 mb-3"><label class="form-label small fw-bold">Satuan</label><input type="text" name="satuan" class="form-control" placeholder="pcs, kg"></div>
-                        <div class="col-md-3 mb-3" id="qty_group"><label class="form-label small fw-bold text-primary">Stok Awal</label><input type="number" name="stok_saat_ini" class="form-control border-primary" value="0"></div>
-                        <div class="col-md-3 mb-3"><label class="form-label small fw-bold">Stok Minimum</label><input type="number" name="stok_minimum" class="form-control" value="0"></div>
-                        <div class="col-md-3 mb-3"><label class="form-label small fw-bold">Harga Jual (Rp)</label><input type="number" name="harga_jual" class="form-control" value="0"></div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label small fw-bold">Satuan</label>
+                            <input type="text" name="satuan" class="form-control" value="{{ $item->satuan ?? '' }}">
+                        </div>
+                        <div class="col-md-3 mb-3" id="qty_group">
+                            <label class="form-label small fw-bold text-primary">Stok</label>
+                            <input type="number" name="stok_saat_ini" class="form-control border-primary" value="{{ $item->stok_saat_ini ?? 0 }}">
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label small fw-bold text-muted">Hrg Beli</label>
+                            <input type="number" name="harga_beli" class="form-control border-secondary" value="{{ $item->harga_beli ?? 0 }}">
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label small fw-bold">Hrg Jual</label>
+                            <input type="number" name="harga_jual" class="form-control" value="{{ $item->harga_jual ?? 0 }}">
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label small fw-bold">Min Stok</label>
+                            <input type="number" name="stok_minimum" class="form-control" value="{{ $item->stok_minimum ?? 0 }}">
+                        </div>
                     </div>
 
                     <div id="bom_section" style="display: none;" class="bg-primary-subtle p-3 rounded mb-3 border border-primary-subtle">

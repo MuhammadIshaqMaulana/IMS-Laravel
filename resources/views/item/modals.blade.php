@@ -77,6 +77,10 @@
                 <div class="modal-body p-4">
                     <div class="row g-3">
                         <div class="col-md-6">
+                            <label class="form-label fw-bold small">Harga Beli Baru:</label>
+                            <input type="number" name="harga_beli_value" class="form-control border-secondary" placeholder="Biarkan kosong">
+                        </div>
+                        <div class="col-md-6">
                             <label class="form-label fw-bold small">Harga Jual Baru:</label>
                             <input type="number" name="harga_jual_value" class="form-control" placeholder="Biarkan kosong">
                         </div>
