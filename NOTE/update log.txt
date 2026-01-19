@@ -52,7 +52,10 @@ Rule Import:
 
 9.
 
-
+10. Dev Note: Demi kelancaran import big data, mohon edit php.ini di XAMPP/Laragon anda sebagai berikut:
+	upload_max_filesize = 128M
+	post_max_size = 128M
+	memory_limit = 256M (Atau lebih tinggi)
 
 
 

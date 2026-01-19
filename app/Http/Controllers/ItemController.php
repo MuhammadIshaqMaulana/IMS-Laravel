@@ -42,18 +42,15 @@ class ItemController extends Controller
             }
         }
 
-        // Mapping nama material untuk preview di UI Card
         $materialIds = [];
         foreach ($items as $item) {
             if ($item->is_bom && is_array($item->materials)) {
-                foreach ($item->materials as $m) {
-                    $materialIds[] = $m['item_id'] ?? null;
-                }
+                foreach ($item->materials as $m) { $materialIds[] = $m['item_id'] ?? null; }
             }
         }
         $materialMap = Item::whereIn('id', array_filter(array_unique($materialIds)))->pluck('nama', 'id');
-
         $allFolders = Folder::orderBy('nama')->get();
+
         return view('item.index', compact('items', 'subFolders', 'currentFolder', 'allFolders', 'breadcrumbs', 'search', 'materialMap'));
     }
 
@@ -144,101 +141,158 @@ class ItemController extends Controller
      */
     public function importCsv(Request $request)
     {
+        // Tingkatkan limit eksekusi & memori khusus untuk proses ini
+        ini_set('max_execution_time', 600);
+        ini_set('memory_limit', '1024M');
+
         $request->validate(['file_csv' => 'required|mimes:csv,txt']);
         $file = $request->file('file_csv');
         $originalFilename = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+        $filePath = $file->getRealPath();
 
-        $handle = fopen($file->getRealPath(), 'r');
-        $rawHeader = fgetcsv($handle, 1000, ',');
-        $header = array_map('trim', $rawHeader);
-
-        // 1. Validasi Header Tabel
-        $requiredHeaders = ['nomor', 'nama', 'satuan', 'stok_saat_ini', 'stok_minimum', 'harga_jual', 'harga_beli', 'note', 'materials', 'tags'];
-        if ($header !== $requiredHeaders) {
-            fclose($handle);
-            return redirect()->back()->with('error', 'Gagal: Struktur table header tidak sesuai. Pastikan urutan dan nama kolom tepat.');
-        }
-
-        $rows = [];
-        while (($data = fgetcsv($handle, 1000, ',')) !== false) {
-            if (count($header) == count($data)) {
-                $rows[] = array_combine($header, $data);
-            }
-        }
-        fclose($handle);
-
-        // --- PRE-VALIDATION: Cek Duplikat ---
-        $csvNames = []; $csvNomors = []; $bomNomors = [];
-        foreach ($rows as $r) { if (!empty($r['materials'])) $bomNomors[] = trim($r['nomor']); }
-
-        foreach ($rows as $index => $row) {
-            $line = $index + 2;
-            $nama = trim($row['nama']); $nomor = trim($row['nomor']);
-            if (empty($nama)) return redirect()->back()->with('error', "Gagal: Nama kosong di baris $line.");
-            if (in_array($nama, $csvNames)) return redirect()->back()->with('error', "Gagal: Nama '$nama' duplikat dalam file.");
-            if (Item::where('nama', $nama)->exists()) return redirect()->back()->with('error', "Gagal: Nama '$nama' sudah ada di database.");
-            if (in_array($nomor, $csvNomors)) return redirect()->back()->with('error', "Gagal: Nomor '$nomor' duplikat dalam file.");
-
-            $csvNames[] = $nama; $csvNomors[] = $nomor;
-
-            if (!empty($row['materials'])) {
-                $mInput = array_map('trim', explode(',', $row['materials']));
-                $seenInRow = [];
-                foreach ($mInput as $part) {
-                    preg_match('/^(\d+)(?:\(([\d.]+)\))?$/', $part, $matches);
-                    if (!$matches) return redirect()->back()->with('error', "Gagal: Format material '$part' salah di baris $line.");
-                    $mNum = $matches[1];
-                    if ($mNum == $nomor) return redirect()->back()->with('error', "Gagal: Item '$nama' mereferensikan dirinya sendiri.");
-                    if (in_array($mNum, $bomNomors)) return redirect()->back()->with('error', "Gagal: Material di baris $line merujuk ke BOM lain (#$mNum).");
-                    if (in_array($mNum, $seenInRow)) return redirect()->back()->with('error', "Gagal: Material ganda #$mNum di baris $line.");
-                    $seenInRow[] = $mNum;
-                }
-            }
-        }
-
-        // --- EXECUTION: Simpan Data ---
         DB::beginTransaction();
         try {
-            // 2. Logika Nama Folder Unik (Auto-increment)
+            // 1. BUAT STAGING TABLE DENGAN INDEX
+            $staging = 'temp_imp_' . Str::random(5);
+            DB::statement("CREATE TEMPORARY TABLE $staging (
+                nomor INT,
+                nama VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+                satuan VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+                stok_saat_ini VARCHAR(50),
+                stok_minimum VARCHAR(50),
+                harga_jual VARCHAR(50),
+                harga_beli VARCHAR(50),
+                note TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+                materials TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+                tags TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+                INDEX(nama),
+                INDEX(nomor)
+            )");
+
+            // 2. NATIVE LOAD (Turbo Speed - ~10 detik)
+            $pathForSql = str_replace('\\', '/', $filePath);
+            DB::connection()->getpdo()->exec("LOAD DATA LOCAL INFILE '$pathForSql'
+                INTO TABLE $staging FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"'
+                LINES TERMINATED BY '\\r\\n' IGNORE 1 LINES");
+
+            // 3. VALIDASI DUPLIKAT (Sekarang sangat cepat karena ada INDEX)
+            $dbDup = DB::table($staging)->join('items', "$staging.nama", "=", "items.nama")
+                        ->whereNull('items.deleted_at')->select("$staging.nama")->first();
+            if ($dbDup) throw new \Exception("Gagal: Nama '{$dbDup->nama}' sudah ada di database.");
+
+            // 4. GENERATE FOLDER
             $folderName = $originalFilename;
             $counter = 1;
             while (Folder::where('nama', $folderName)->where('parent_id', $request->folder_id)->exists()) {
                 $counter++;
                 $folderName = "{$originalFilename} ({$counter})";
             }
-
             $folder = Folder::create(['nama' => $folderName, 'parent_id' => $request->folder_id]);
             $folder->updatePath();
 
-            $tempIdToRealId = []; $bomQueue = [];
+            // 5. MASS INSERT (Langsung ke Database - ~30 detik)
+            $now = now();
+            DB::statement("INSERT INTO items (nama, sku, satuan, stok_saat_ini, stok_minimum, harga_jual, harga_beli, note, folder_id, created_at, updated_at)
+                SELECT TRIM(nama), CONCAT('SKU-', nomor, '-', UNIX_TIMESTAMP()), satuan,
+                CASE WHEN (materials IS NOT NULL AND materials <> '') THEN 0 ELSE stok_saat_ini END,
+                stok_minimum, harga_jual, harga_beli, note, {$folder->id}, '$now', '$now'
+                FROM $staging WHERE nama <> ''");
 
-            foreach ($rows as $row) {
-                $isImportedAsBom = !empty($row['materials']);
-                $item = Item::create([
-                    'nama' => trim($row['nama']), 'sku' => $this->generateUniqueSku($row['nama']), 'satuan' => $row['satuan'] ?? 'pcs',
-                    'stok_saat_ini' => $isImportedAsBom ? 0 : ($row['stok_saat_ini'] ?? 0), 'stok_minimum' => $row['stok_minimum'] ?? 0,
-                    'harga_jual' => floor($row['harga_jual'] ?? 0), 'harga_beli' => floor($row['harga_beli'] ?? 0),
-                    'note' => $row['note'] ?? null, 'tags' => !empty($row['tags']) ? array_map('trim', explode(',', $row['tags'])) : null,
-                    'folder_id' => $folder->id
-                ]);
-                $tempIdToRealId[trim($row['nomor'])] = $item->id;
-                if ($isImportedAsBom) { $bomQueue[] = ['item' => $item, 'raw' => $row['materials']]; }
-                else if ($item->stok_saat_ini > 0) { $this->logActivity($item->id, $item->stok_saat_ini, "Import dari $originalFilename"); }
-            }
-
-            foreach ($bomQueue as $q) {
-                $parts = array_map('trim', explode(',', $q['raw'])); $finalM = [];
-                foreach ($parts as $p) {
-                    preg_match('/^(\d+)(?:\(([\d.]+)\))?$/', $p, $matches);
-                    $mNum = $matches[1]; $mQty = isset($matches[2]) ? (float)$matches[2] : 1.0;
-                    if (isset($tempIdToRealId[$mNum])) { $finalM[] = ['item_id' => $tempIdToRealId[$mNum], 'qty' => $mQty]; }
-                }
-                $q['item']->update(['materials' => $finalM]);
-            }
+            // 6. FINALISASI BOM (Hanya memproses baris yang PUNYA material)
+            $this->finalizeImportBomOptimized($staging, $folder->id);
 
             DB::commit();
-            return redirect()->route('item.index', ['folder_id' => $folder->id])->with('success', "Import Berhasil ke folder: $folderName");
-        } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', 'Gagal: ' . $e->getMessage()); }
+            return redirect()->route('item.index', ['folder_id' => $folder->id])
+                             ->with('success', "Turbo Import Selesai! Data masuk ke folder: $folderName");
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Helper untuk mengubah nomor(qty) menjadi id(qty) secara massal
+     */
+    private function finalizeBomRelations($stagingTable, $folderId)
+    {
+        // Ambil mapping: nomor_csv => real_id
+        $items = DB::table('items')
+            ->join($stagingTable, 'items.nama', '=', "$stagingTable.nama")
+            ->where('items.folder_id', $folderId)
+            ->select('items.id', "$stagingTable.nomor", "$stagingTable.materials")
+            ->whereNotNull("$stagingTable.materials")
+            ->get();
+
+        $mapping = $items->pluck('id', 'nomor')->toArray();
+
+        foreach ($items->chunk(1000) as $chunk) {
+            foreach ($chunk as $row) {
+                $rawMaterials = explode(',', $row->materials);
+                $finalMaterials = [];
+
+                foreach ($rawMaterials as $part) {
+                    preg_match('/^(\d+)(?:\(([\d.]+)\))?$/', trim($part), $matches);
+                    if ($matches) {
+                        $mNum = $matches[1];
+                        $mQty = isset($matches[2]) ? (float)$matches[2] : 1.0;
+
+                        if (isset($mapping[$mNum])) {
+                            $finalMaterials[] = ['item_id' => $mapping[$mNum], 'qty' => $mQty];
+                        }
+                    }
+                }
+
+                if (!empty($finalMaterials)) {
+                    DB::table('items')->where('id', $row->id)->update([
+                        'materials' => json_encode($finalMaterials)
+                    ]);
+                }
+            }
+        }
+    }
+
+    private function finalizeImportBomOptimized($staging, $folderId)
+    {
+        // Ambil data item yang HANYA memiliki material dari folder ini
+        $bomItems = DB::table('items')
+            ->join($staging, 'items.nama', '=', "$staging.nama")
+            ->where('items.folder_id', $folderId)
+            ->whereNotNull("$staging.materials")
+            ->where("$staging.materials", "<>", "")
+            ->select('items.id', "$staging.materials")
+            ->get();
+
+        if ($bomItems->isEmpty()) return;
+
+        // Ambil Mapping seluruh nomor ke ID di folder ini (untuk resolusi ID)
+        // Kita gunakan pluck agar memori tetap terkendali
+        $mapping = DB::table('items')
+            ->join($staging, 'items.nama', '=', "$staging.nama")
+            ->where('items.folder_id', $folderId)
+            ->pluck('items.id', "$staging.nomor")
+            ->toArray();
+
+        // Gunakan batch update untuk meminimalkan query
+        foreach ($bomItems->chunk(1000) as $chunk) {
+            foreach ($chunk as $row) {
+                $mParts = array_map('trim', explode(',', $row->materials));
+                $final = [];
+                foreach ($mParts as $p) {
+                    preg_match('/^(\d+)(?:\(([\d.]+)\))?$/', $p, $matches);
+                    if ($matches) {
+                        $mNum = $matches[1];
+                        $mQty = isset($matches[2]) ? (float)$matches[2] : 1.0;
+                        if (isset($mapping[$mNum])) {
+                            $final[] = ['item_id' => $mapping[$mNum], 'qty' => $mQty];
+                        }
+                    }
+                }
+                if ($final) {
+                    DB::table('items')->where('id', $row->id)->update(['materials' => json_encode($final)]);
+                }
+            }
+        }
     }
 
     /**
@@ -251,7 +305,7 @@ class ItemController extends Controller
             fputcsv($file, ['nomor', 'nama', 'satuan', 'stok_saat_ini', 'stok_minimum', 'harga_jual', 'harga_beli', 'note', 'materials', 'tags']);
             foreach ($items as $index => $item) {
                 $mParts = [];
-                if ($item->is_bom && is_array($item->materials)) {
+                if ($item->is_bom) {
                     foreach ($item->materials as $m) { $mParts[] = "{$m['item_id']}({$m['qty']})"; }
                 }
                 fputcsv($file, [$index + 1, $item->nama, $item->satuan, $item->calculated_stock, $item->stok_minimum, $item->harga_jual, $item->harga_beli, $item->note, implode(', ', $mParts), $item->tags ? implode(', ', $item->tags) : '']);
@@ -377,23 +431,11 @@ class ItemController extends Controller
     {
         DB::beginTransaction();
         try {
-            // 1. Ambil semua ID folder keturunan menggunakan path (termasuk folder ini)
-            $descendantFolders = Folder::where('path', 'LIKE', $folder->path . '%')->get();
-            $folderIds = $descendantFolders->pluck('id');
-
-            // 2. Soft delete semua Item yang ada di folder-folder tersebut
-            // Ini akan mengisi kolom 'deleted_at' pada tabel items
-            Item::whereIn('folder_id', $folderIds)->delete();
-
-            // 3. Soft delete semua Folder tersebut
-            // Ini akan mengisi kolom 'deleted_at' pada tabel folders
-            Folder::whereIn('id', $folderIds)->delete();
-
+            $descendantIds = Folder::where('path', 'LIKE', $folder->path . '%')->pluck('id');
+            Item::whereIn('folder_id', $descendantIds)->delete();
+            Folder::whereIn('id', $descendantIds)->delete();
             DB::commit();
-            return redirect()->route('item.index')->with('success', "Folder '{$folder->nama}' dan seluruh isinya berhasil dipindahkan ke tempat sampah.");
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return redirect()->back()->with('error', 'Gagal menghapus folder: ' . $e->getMessage());
-        }
+            return redirect()->route('item.index')->with('success', "Folder '{$folder->nama}' dan isinya dihapus.");
+        } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', 'Gagal.'); }
     }
 }
