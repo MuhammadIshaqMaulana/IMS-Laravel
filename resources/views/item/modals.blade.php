@@ -106,6 +106,11 @@
                             <label class="form-label fw-bold small">Tambah Tags (Pisahkan koma):</label>
                             <input type="text" name="tags_input_value" class="form-control" placeholder="promo, cuci-gudang">
                         </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold small">Ubah Catatan (Note) Massal:</label>
+                            <textarea name="note_value" class="form-control" rows="3" placeholder="Ketik catatan baru untuk semua item terpilih..."></textarea>
+                            <small class="text-muted" style="font-size: 0.7rem;">*Catatan lama pada tiap item akan ditimpa dengan catatan baru ini.</small>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer border-0">
@@ -160,5 +165,33 @@
                 </div>
             </div>
         </form>
+    </div>
+</div>
+
+<!-- Modal Konfirmasi Hapus Folder -->
+<div class="modal fade" id="deleteFolderModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title fw-bold"><i class="fas fa-exclamation-triangle me-2"></i>Konfirmasi Hapus</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="deleteFolderForm" action="" method="POST">
+                @csrf
+                @method('DELETE')
+                <div class="modal-body p-4 text-center">
+                    <i class="fas fa-folder-minus fa-4x text-danger opacity-25 mb-3"></i>
+                    <h5 class="fw-bold">Hapus Folder "<span id="deleteFolderNameText"></span>"?</h5>
+                    <p class="text-muted mb-0">Folder akan dihapus beserta semua isi (sub-folder dan item) di dalamnya, yakin?</p>
+                    <div class="alert alert-warning mt-3 mb-0 small">
+                        <i class="fas fa-info-circle me-1"></i> Tindakan ini tidak dapat dibatalkan.
+                    </div>
+                </div>
+                <div class="modal-footer border-0 bg-light">
+                    <button type="button" class="btn btn-secondary fw-bold px-4" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-danger fw-bold px-4 shadow-sm">Ya, Hapus Semua</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>

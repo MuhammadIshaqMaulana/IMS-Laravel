@@ -2,49 +2,58 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes; // Import trait ini
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Folder extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes; // Tambahkan SoftDeletes di sini
 
     protected $fillable = ['nama', 'parent_id', 'path'];
 
-    public function parent() { return $this->belongsTo(Folder::class, 'parent_id'); }
-    public function children() { return $this->hasMany(Folder::class, 'parent_id'); }
-    public function items() { return $this->hasMany(Item::class, 'folder_id'); }
+    // Relasi ke folder induk
+    public function parent() {
+        return $this->belongsTo(Folder::class, 'parent_id');
+    }
+
+    // Relasi ke sub-folder
+    public function children() {
+        return $this->hasMany(Folder::class, 'parent_id');
+    }
+
+    // Relasi ke item
+    public function items() {
+        return $this->hasMany(Item::class);
+    }
 
     /**
-     * Mengambil urutan folder dari Root sampai folder ini untuk Breadcrumb.
+     * Mengambil silsilah folder untuk breadcrumbs.
      */
-    public function getBreadcrumbs()
-    {
+    public function getBreadcrumbs() {
         $breadcrumbs = collect([]);
-        $current = $this;
-
-        while ($current) {
-            $breadcrumbs->prepend($current);
-            $current = $current->parent;
+        $folder = $this;
+        while ($folder) {
+            $breadcrumbs->prepend($folder);
+            $folder = $folder->parent;
         }
-
         return $breadcrumbs;
     }
 
-    public function updatePath(): void
-    {
-        if ($this->parent_id) {
-            $parentFolder = self::find($this->parent_id);
-            $this->path = ($parentFolder->path ?? '/') . $this->id . '/';
+    /**
+     * Update Materialized Path (e.g., "1/5/12")
+     */
+    public function updatePath() {
+        if ($this->parent) {
+            $this->path = $this->parent->path . '/' . $this->id;
         } else {
-            $this->path = '/' . $this->id . '/';
+            $this->path = (string) $this->id;
         }
-        $this->saveQuietly();
+        $this->save();
     }
 
-    public function isDescendantOf($id): bool
-    {
-        if (!$this->path) return false;
-        return str_contains($this->path, "/{$id}/");
+    public function isDescendantOf($folderId) {
+        $ancestorIds = explode('/', $this->path);
+        return in_array((string)$folderId, $ancestorIds);
     }
 }

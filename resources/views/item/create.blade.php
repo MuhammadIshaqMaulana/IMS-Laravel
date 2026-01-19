@@ -90,7 +90,7 @@
                     <div class="mb-3"><label class="form-label small fw-bold">Catatan</label><textarea name="note" class="form-control" rows="2"></textarea></div>
                 </div>
             </div>
-            <button type="submit" class="btn btn-primary btn-lg w-100 shadow-sm" id="btnSubmit">Simpan Sekarang</button>
+            <button type="submit" class="btn btn-primary btn-lg w-100 shadow-sm" id="btnSubmit">Simpan</button>
         </form>
     </div>
 </div>

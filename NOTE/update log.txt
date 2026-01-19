@@ -29,6 +29,28 @@ Berikut lanjutan nomor 5 pada chat sebelumnya:
 * Walaupun diberi kebebasan untuk mengedit, tapi sortly tetap ketat dalam membatasi input. Seperti mencegah user mengalikan harga sampai out of max input.
 Saya juga ingin agar aplikasi ini tetap berbahasa indonesia.
 
+7. jika item material BOM dihapus, BOMnya gimana? sebaiknya tetep ada tapi materialnya berkurang. (untuk sekarang dia muncul pesan Item tidak ditemukan (#37), ini juga bagus)
+
+8. - samakan kolom export csv/pdf agar serasi yaitu "nomor", "nama", "satuan", "stok_saat_ini", "stok_minimum", "harga_jual", "harga_beli", "note", "materials", "tags" dan pdf tambahkan kolom Image.
+- Terus boss gue minta dibuatkan fitur import data dengan inputnya sama kayak outputnya export. 
+
+Rule Import:
+- Kamu akan bulk import data dari file CSV ke database
+- Pada CSV kamu input "nomor", "nama", "satuan", "stok_saat_ini", "stok_minimum", "harga_jual", "harga_beli", "note", "materials", "tags". Input selain ini tidak akan masuk database dan error.
+- ID, SKU, dan data otomatis lain akan tetap dibuat otomatis untuk mencegah duplikasi. Nomor digunakan sebagai id sementara agar user bisa membuat BOM di CSV. Nomor tidak akan masuk ke database
+- Jika ingin membuat BOM, input material dengan nomor dari item yang ada di file CSV. Item akan otomatis menjadi BOM jika ada input pada kolom materialnya dan kolom stok_saat_ini diabaikan.
+- Kamu tidak bisa input material suatu BOM di luar file CSV. Namun, kamu bisa mengupdate materialnya nanti ketika BOM tersebut sudah masuk database
+- saat import, sistem membaca kolom apa saja yang ada di file. Jika hanya ada kolom nama, maka akan tetap masuk database. Namun jika data A tidak ada nama, A tidak akan masuk database dan akan muncul warning dan data lainnya akan tetap masuk database. jika ada cell dari data B yang tidak termasuk table header manapun, maka B tetap masuk database tanpa cell itu.
+- nama tidak boleh duplikat baik dalam csv maupun dengan yang di database.
+- saat input nomor, tidak boleh duplikat, kalau ada nomor duplikat semua data tidak akan masuk database
+- rule BOM tetap berlaku, material data C tidak boleh berisi nomor item BOM(memiliki material) dan juga tidak boleh nomor C itu sendiri dan juga tidak boleh memasukkan nomor sama berulang kali. Kalau melanggar, semua data tidak akan masuk database.
+- Semua data hasil import akan masuk ke folder dengan nama dari file csv tersebut.
+- Gue ingin loe lengkapi format materials export menjadi "id(qty)" dan materials import menjadi "nomor(qty)". Contoh: 18(200) berarti id = 18 dan qty = 200. 
+- saat import, jika user hanya input material menggunakan nomor tanpa quantity, maka quantity default adalah 1
+- jika table header tidak sesuai, maka import gagal dengan error table header tidak sesuai
+- jika user import data dan nama filenya sama dengan folder yang sudah ada dan file tersebut berhasil melewati rules, buatkan nama folder untuk import itu dengan menambahkan nomor. Misal nama foldernya "Gudang_A (2)". Lalu jika user import ketiga kalinya dengan nama file "Gudang_A" lagi, maka beri nama "Gudang_A (3)". Pokoknya jangan sampai nama folder duplikat
+
+9.
 
 
 

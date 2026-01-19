@@ -85,7 +85,7 @@
                         <input type="text" name="tags_input" class="form-control" value="{{ is_array($item->tags) ? implode(', ', $item->tags) : '' }}">
                     </div>
                     <div class="col-md-12">
-                        <label class="form-label small fw-bold text-muted">Catatan & Note</label>
+                        <label class="form-label small fw-bold text-muted">Catatan</label>
                         <textarea name="note" class="form-control" rows="3">{{ $item->note }}</textarea>
                         @if($item->note) <div class="mt-2 p-2 bg-warning-subtle small rounded border border-warning-subtle"><strong>Note saat ini:</strong> {{ $item->note }}</div> @endif
                     </div>

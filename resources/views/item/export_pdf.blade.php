@@ -1,74 +1,61 @@
 <!DOCTYPE html>
-<html lang="id">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Laporan Inventaris - My IMS</title>
-    <!-- Gunakan CSS minimal untuk cetak -->
     <style>
-        body { font-family: sans-serif; margin: 20px; }
-        h1 { text-align: center; margin-bottom: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        th, td { border: 1px solid #000; padding: 8px; text-align: left; font-size: 10px; vertical-align: top; }
-        th { background-color: #f2f2f2; }
-        .image-placeholder { width: 50px; height: 50px; background-color: #eee; text-align: center; line-height: 50px; font-size: 8px; }
-        .page-break { page-break-after: always; }
+        body { font-family: sans-serif; font-size: 8px; margin: 0; padding: 10px; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th, td { border: 0.5px solid #ccc; padding: 4px; word-wrap: break-word; vertical-align: top; }
+        th { background-color: #f8f9fa; font-weight: bold; text-align: left; text-transform: lowercase; }
+        .img-preview { width: 25px; height: 25px; object-fit: cover; }
+        .text-right { text-align: right; }
+        .badge { display: inline-block; padding: 1px 3px; background: #eee; border-radius: 2px; font-size: 7px; }
     </style>
 </head>
 <body>
-
-    <h1>Laporan Inventaris Universal My IMS</h1>
-    <p>Tanggal Ekspor: {{ now()->format('d M Y H:i:s') }}</p>
-
+    <h3 style="text-align: center;">LAPORAN INVENTARIS SISTEM</h3>
     <table>
         <thead>
             <tr>
-                <th style="width: 50px;">Gambar</th>
-                <th>Nama Item / Varian</th>
-                <th>SKU / ID</th>
-                <th>Stok</th>
-                <th>Min. Level</th>
-                <th>Harga Jual (Rp)</th>
-                <th>Tags</th>
-                <th>Notes</th>
+                <th style="width: 30px;">image</th>
+                <th style="width: 25px;">nomor</th>
+                <th>nama</th>
+                <th style="width: 35px;">satuan</th>
+                <th style="width: 45px;" class="text-right">stok_saat_ini</th>
+                <th style="width: 45px;" class="text-right">stok_minimum</th>
+                <th style="width: 55px;" class="text-right">harga_jual</th>
+                <th style="width: 55px;" class="text-right">harga_beli</th>
+                <th>note</th>
+                <th>materials</th>
+                <th>tags</th>
             </tr>
         </thead>
         <tbody>
-            @foreach ($items as $item)
+            @foreach($items as $item)
             <tr>
-                <td>
-                    @if ($item->image_link)
-                        <!-- Link gambar diisi dengan placeholder karena tidak dapat dimuat di lingkungan Canvas/Print -->
-                        <div class="image-placeholder">IMG</div>
-                    @else
-                        <div class="image-placeholder">N/A</div>
-                    @endif
+                <td style="text-align: center;">
+                    @if($item->image_link) <img src="{{ $item->image_link }}" class="img-preview"> @else - @endif
                 </td>
-                <td>
-                    <strong>{{ $item->nama }}</strong>
-                    @if ($item->materials)
-                         <span style="font-weight: bold; color: blue;">(BOM/KIT)</span>
-                    @endif
+                <td>{{ $loop->iteration }}</td>
+                <td><strong>{{ $item->nama }}</strong><br><span style="color:#888;">{{ $item->sku }}</span></td>
+                <td>{{ $item->satuan }}</td>
+                <td class="text-right">{{ number_format($item->calculated_stock, 0) }}</td>
+                <td class="text-right">{{ number_format($item->stok_minimum, 0) }}</td>
+                <td class="text-right">{{ number_format($item->harga_jual, 0) }}</td>
+                <td class="text-right">{{ number_format($item->harga_beli, 0) }}</td>
+                <td style="font-size: 7px;">{{ $item->note }}</td>
+                <td style="font-size: 7px;">
+                    @if($item->is_bom && is_array($item->materials))
+                        @foreach($item->materials as $m)
+                            {{ $m['item_id'] }}({{ $m['qty'] }}){{ !$loop->last ? ',' : '' }}
+                        @endforeach
+                    @else - @endif
                 </td>
-                <td>{{ $item->sku ?? $item->id }}</td>
-                <td>
-                    @if ($item->materials)
-                         Kapasitas: {{ number_format($item->calculated_stock, 0) }} {{ $item->satuan }}
-                    @else
-                        {{ number_format($item->stok_saat_ini, 2) }} {{ $item->satuan }}
-                    @endif
-                </td>
-                <td>{{ number_format($item->stok_minimum, 2) }}</td>
-                <td>{{ number_format($item->harga_jual, 0, ',', '.') }}</td>
-                <td>{{ is_array($item->tags) ? implode(', ', $item->tags) : '' }}</td>
-                <td>{{ Str::limit($item->note, 50) }}</td>
+                <td>{{ $item->tags ? implode(', ', $item->tags) : '-' }}</td>
             </tr>
             @endforeach
         </tbody>
     </table>
-
     <script>
-        // Memicu dialog cetak (Print) setelah tampilan dimuat
         window.onload = function() {
             window.print();
         }

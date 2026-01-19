@@ -30,6 +30,9 @@
                 <div class="input-group input-group-sm shadow-sm">
                     <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
                     <input type="text" name="q" class="form-control border-start-0 shadow-none" placeholder="Cari nama, SKU, atau tag..." value="{{ $search }}">
+                    @if($search)
+                        <a href="{{ route('item.index') }}" class="btn btn-outline-secondary border-start-0 text-muted"><i class="fas fa-times"></i></a>
+                    @endif
                 </div>
             </form>
         </div>
@@ -40,15 +43,22 @@
                 {{ $currentFolder ? $currentFolder->nama : 'Inventaris Utama' }}
             </h2>
             <div class="d-flex gap-2">
+                <!-- FITUR IMPORT -->
+                <button class="btn btn-outline-success fw-bold shadow-sm px-3" data-bs-toggle="modal" data-bs-target="#importModal">
+                    <i class="fas fa-file-import me-1"></i> Import
+                </button>
+
+                <!-- DROPDOWN EXPORT -->
                 <div class="dropdown shadow-sm">
                     <button class="btn btn-outline-dark dropdown-toggle fw-bold" type="button" data-bs-toggle="dropdown">
                         <i class="fas fa-file-export me-2"></i> Export
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end border-0 shadow">
-                        <li><a class="dropdown-item" href="{{ route('item.export.csv') }}"><i class="fas fa-file-csv me-2 text-success"></i> CSV Data</a></li>
-                        <li><a class="dropdown-item" href="{{ route('item.export.pdf') }}" target="_blank"><i class="fas fa-file-pdf me-2 text-danger"></i> PDF (Cetak)</a></li>
+                        <li><a class="dropdown-item" href="{{ route('item.export.csv') }}"><i class="fas fa-file-csv me-2 text-success"></i> Simpan ke CSV</a></li>
+                        <li><a class="dropdown-item" href="{{ route('item.export.pdf') }}" target="_blank"><i class="fas fa-file-pdf me-2 text-danger"></i> Cetak PDF</a></li>
                     </ul>
                 </div>
+
                 <a href="{{ route('item.create', ['folder_id' => request('folder_id')]) }}" class="btn btn-primary px-4 fw-bold shadow-sm">
                     <i class="fas fa-plus me-2"></i> Tambah Baru
                 </a>
@@ -56,7 +66,7 @@
         </div>
     </div>
 
-    <!-- TOOLBAR AKSI MASSAL -->
+    <!-- TOOLBAR AKSI MASSAL (MUNCUL OTOMATIS) -->
     <div id="bulkActions" class="bg-dark text-white p-2 mb-3 rounded shadow-lg border border-warning" style="display: none; position: sticky; top: 0; z-index: 1000;">
         <div class="d-flex justify-content-between align-items-center px-2">
             <div class="d-flex align-items-center gap-3">
@@ -67,20 +77,20 @@
                 <span id="selectedCount" class="fw-bold small badge bg-warning text-dark px-2 py-1">0 Selected</span>
             </div>
             <div class="d-flex gap-2">
-                <button class="btn btn-sm btn-info text-white fw-bold shadow-sm px-3" onclick="openBulkQtyModal()">
+                <button class="btn btn-sm btn-info text-white fw-bold shadow-sm px-3" onclick="openBulkQtyModal()" title="Sesuaikan Stok Massal">
                     <i class="fas fa-plus-minus me-1"></i> Stok
                 </button>
-                <button class="btn btn-sm btn-success fw-bold shadow-sm px-3" onclick="openBulkCloneModal()">
+                <button class="btn btn-sm btn-success fw-bold shadow-sm px-3" onclick="openBulkCloneModal()" title="Duplikasi Data Terpilih">
                     <i class="fas fa-copy me-1"></i> Clone
                 </button>
-                <button class="btn btn-sm btn-warning fw-bold shadow-sm px-3" onclick="openBulkModal()">
+                <button class="btn btn-sm btn-warning fw-bold shadow-sm px-3" onclick="openBulkModal()" title="Edit Field Massal">
                     <i class="fas fa-edit me-1"></i> Edit Data
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- GRID UTAMA -->
+    <!-- GRID UTAMA (FOLDERS & ITEMS) -->
     <div class="row overflow-y-auto flex-grow-1 g-4 pb-5" id="inventoryGrid">
 
         <!-- 1. FOLDER CARD DENGAN DUAL COUNTER -->
@@ -110,15 +120,20 @@
                     <button class="btn btn-outline-light btn-sm flex-grow-1 border text-dark shadow-sm" onclick="openMoveModal('folder', {{ $folder->id }}, '{{ $folder->nama }}')" title="Pindahkan Folder">
                         <i class="fas fa-external-link-alt"></i>
                     </button>
+                    <!-- TOMBOL DELETE BARU -->
+                    <button class="btn btn-outline-danger btn-sm flex-grow-1 border shadow-sm" onclick="openDeleteFolderModal({{ $folder->id }}, '{{ $folder->nama }}')" title="Hapus Folder & Isi">
+                        <i class="fas fa-trash"></i>
+                    </button>
                 </div>
             </div>
         </div>
         @endforeach
 
-        <!-- 2. ITEM CARD (DENGAN BOM PREVIEW & HARGA BELI) -->
+        <!-- 2. ITEM CARD -->
         @foreach($items as $item)
         <div class="col-xl-3 col-lg-4 col-md-6">
             <div class="card h-100 border-0 shadow-sm item-card position-relative">
+                <!-- Checkbox untuk Bulk Action -->
                 <div class="position-absolute top-0 start-0 p-2 z-3">
                     <input class="form-check-input item-checkbox shadow-none" type="checkbox" data-item-id="{{ $item->id }}" style="width: 1.2rem; height: 1.2rem; cursor: pointer;">
                 </div>
@@ -193,11 +208,38 @@
             </div>
         </div>
         @endforeach
+
+        @if($subFolders->isEmpty() && $items->isEmpty())
+        <div class="col-12 text-center py-5 opacity-50">
+            <i class="fas fa-box-open fa-5x mb-3 text-muted"></i>
+            <h4 class="text-muted">Tidak ada data ditemukan.</h4>
+        </div>
+        @endif
     </div>
 
     <!-- PAGINASI (FIX OVERLAP) -->
     <div class="mt-4 pagination-wrapper">
         {{ $items->appends(request()->query())->links() }}
+    </div>
+</div>
+
+<!-- Modal Import CSV -->
+<div class="modal fade" id="importModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form action="{{ route('item.import') }}" method="POST" enctype="multipart/form-data">
+            @csrf
+            <input type="hidden" name="folder_id" value="{{ request('folder_id') }}">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-success text-white"><h5 class="fw-bold m-0">Bulk Import CSV</h5></div>
+                <div class="modal-body p-4">
+                    <div class="alert alert-info small">Format CSV: <strong>nomor, nama, satuan, stok_saat_ini, stok_minimum, harga_jual, harga_beli, note, materials, tags</strong>.</div>
+                    <label class="form-label fw-bold">Pilih File CSV:</label>
+                    <input type="file" name="file_csv" class="form-control" accept=".csv" required>
+                    <small class="text-muted mt-2 d-block">Gunakan kolom 'materials' untuk nomor urut (nomor) item lain di file ini.</small>
+                </div>
+                <div class="modal-footer border-0"><button type="submit" class="btn btn-success fw-bold w-100 shadow-sm">Proses Import Sekarang</button></div>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -211,11 +253,12 @@
         new bootstrap.Modal(document.getElementById('editFolderModal')).show();
     }
     function openMoveModal(type, id, name) {
+        const modalEl = document.getElementById('moveModal');
         const form = document.getElementById('moveForm');
         document.getElementById('moveItemName').textContent = name;
         form.querySelector('input[name="id"]').value = id;
         form.querySelector('input[name="target_type"]').value = type;
-        new bootstrap.Modal(document.getElementById('moveModal')).show();
+        new bootstrap.Modal(modalEl).show();
     }
     function openQtyModal(id, name) {
         const form = document.getElementById('qtyForm');
@@ -263,19 +306,21 @@
         const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
         tooltipTriggerList.map(function (tooltipTriggerEl) { return new bootstrap.Tooltip(tooltipTriggerEl); });
     });
+    function openDeleteFolderModal(id, name) {
+        const modalEl = document.getElementById('deleteFolderModal');
+        const form = document.getElementById('deleteFolderForm');
+        document.getElementById('deleteFolderNameText').textContent = name;
+        form.action = `/folder/${id}/delete`; // Pastikan rute ini sesuai di web.php
+        new bootstrap.Modal(modalEl).show();
+    }
 </script>
 
 <style>
-    /* Card Styling */
     .item-card { transition: all 0.25s cubic-bezier(.4,0,.2,1); border: 1px solid #f0f0f0 !important; }
     .item-card:hover { transform: translateY(-5px); border-color: #895129 !important; box-shadow: 0 15px 25px -5px rgba(0,0,0,0.1) !important; }
-
-    /* Breadcrumb */
     .breadcrumb-item + .breadcrumb-item::before { content: "›"; font-size: 1.5rem; vertical-align: middle; line-height: 10px; color: #ddd; }
-
-    /* Pagination Fix */
     .pagination-wrapper nav { display: flex; justify-content: center; }
     .pagination-wrapper svg { width: 20px; height: 20px; vertical-align: middle; }
-    .pagination-wrapper nav > div:first-child { display: none; } /* Hide "Showing X to Y" */
+    .pagination-wrapper nav > div:first-child { display: none; }
 </style>
 @endsection
