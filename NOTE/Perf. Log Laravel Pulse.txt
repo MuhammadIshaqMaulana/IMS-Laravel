@@ -1,0 +1,19 @@
+composer require laravel/pulse
+
+**Langkah 2: Publish & Migrate**
+Buat tabel database khusus untuk menyimpan statistik Pulse:
+```bash
+php artisan vendor:publish --provider="Laravel\Pulse\PulseServiceProvider"
+php artisan migrate
+
+**Langkah 3: Jalankan Recorder**
+Agar Pulse bisa merekam data secara real-time, loe butuh satu terminal lagi buat jalanin perintah ini:
+```bash
+php artisan pulse:check
+
+**Langkah 4: Akses Dashboard**
+Buka browser loe ke: `http://ims-inventory.com/pulse`
+
+**Tips Savage:**
+Buka dashboard Pulse di layar monitor sebelah kanan, dan buka halaman Import di layar monitor sebelah kiri. Pas loe klik "Import", loe bakal liat grafik **Slow Queries** dan **CPU Usage** naik secara dramatis.
+
