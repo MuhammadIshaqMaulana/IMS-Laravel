@@ -20,6 +20,7 @@ Route::post('logout', [GoogleAuthController::class, 'logout'])->name('logout');
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/item/search-ajax', [ItemController::class, 'searchAjax'])->name('item.search.ajax');
 
     // Item & Inventory Routes
     Route::get('item/export/csv', [ItemController::class, 'exportCsv'])->name('item.export.csv');

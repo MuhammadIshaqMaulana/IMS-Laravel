@@ -12,17 +12,17 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('items', function (Blueprint $table) {
-            // Soft Delete sudah ditambahkan di migrasi sebelumnya. Tambahkan if not exists.
-            if (!Schema::hasColumn('harga_beli')) {
-                $table->harga_beli();
-            }
+            //
         });
     }
+
     /**
      * Reverse the migrations.
      */
     public function down(): void
     {
-        //
+        Schema::table('items', function (Blueprint $table) {
+            //
+        });
     }
 };

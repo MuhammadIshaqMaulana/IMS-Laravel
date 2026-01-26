@@ -1,5 +1,15 @@
 @extends('layouts.app')
 @section('title', 'Tambah Inventaris')
+
+<!-- [BARU] Load Library Select2 untuk pencarian kencang -->
+@section('styles')
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+<style>
+    .select2-container--bootstrap-5 .select2-selection { border-radius: 0.375rem; border: 1px solid #dee2e6; }
+</style>
+@endsection
+
 @section('content')
 <div class="row justify-content-center">
     <div class="col-lg-10">
@@ -95,62 +105,98 @@
     </div>
 </div>
 
+<!-- [DITIMPA] Bagian Script di bawah halaman -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const types = document.querySelectorAll('input[name="type"]');
-        const itemFields = document.getElementById('item_exclusive_fields');
-        const isBom = document.getElementById('is_bom');
-        const bomSection = document.getElementById('bom_section');
-        const qtyGroup = document.getElementById('qty_group');
-        const hasVariants = document.getElementById('has_variants');
-        const variantSection = document.getElementById('variant_section');
+    $(document).ready(function() {
+        const bomSection = $('#bom_section');
+        const qtyGroup = $('#qty_group');
 
-        // Logic Tipe Utama (Item vs Folder)
-        types.forEach(t => t.addEventListener('change', () => {
-            itemFields.style.display = t.value === 'folder' ? 'none' : 'block';
-        }));
-
-        // Logic BOM
-        isBom.addEventListener('change', () => {
-            bomSection.style.display = isBom.checked ? 'block' : 'none';
-            qtyGroup.style.display = isBom.checked ? 'none' : 'block';
-            if(isBom.checked) document.querySelector('input[name="stok_saat_ini"]').value = 0;
-        });
-
-        // Logic Varian
-        hasVariants.addEventListener('change', () => { variantSection.style.display = hasVariants.checked ? 'block' : 'none'; });
-
-        // Add BOM Row
-        const bomRows = document.getElementById('bom_rows');
-        document.getElementById('add_material_btn').addEventListener('click', () => {
-            const div = document.createElement('div'); div.className = 'row g-2 mb-2 material-row';
-            div.innerHTML = `<div class="col-7"><select class="form-select mat-id shadow-sm">@foreach($allMaterials as $m)<option value="{{$m->id}}">{{$m->nama}}</option>@endforeach</select></div>
-                <div class="col-3"><input type="number" step="0.01" class="form-control mat-qty shadow-sm" placeholder="Qty"></div>
-                <div class="col-2"><button type="button" class="btn btn-danger w-100" onclick="this.parentElement.parentElement.remove()"><i class="fas fa-times"></i></button></div>`;
-            bomRows.appendChild(div);
-        });
-
-        // Add Variant Row
-        const variantRows = document.getElementById('variant_rows');
-        document.getElementById('add_variant_btn').addEventListener('click', () => {
-            const div = document.createElement('div'); div.className = 'row g-2 mb-2 variant-row';
-            div.innerHTML = `<div class="col-5"><input type="text" class="form-control var-name shadow-sm" placeholder="Ukuran"></div>
-                <div class="col-5"><input type="text" class="form-control var-options shadow-sm" placeholder="S, M, L"></div>
-                <div class="col-2"><button type="button" class="btn btn-danger w-100" onclick="this.parentElement.parentElement.remove()"><i class="fas fa-times"></i></button></div>`;
-            variantRows.appendChild(div);
-        });
-
-        // Final Submit
-        document.getElementById('btnSubmit').addEventListener('click', () => {
-            const mats = [];
-            document.querySelectorAll('.material-row').forEach(r => mats.push({ item_id: r.querySelector('.mat-id').value, qty: r.querySelector('.mat-qty').value }));
-            document.getElementById('materials_data').value = JSON.stringify(mats);
-
-            const vars = [];
-            if(hasVariants.checked) {
-                document.querySelectorAll('.variant-row').forEach(r => vars.push({ name: r.querySelector('.var-name').value, options: r.querySelector('.var-options').value }));
+        // Toggle BOM vs Normal
+        $('#is_bom').on('change', function() {
+            if(this.checked) {
+                bomSection.show();
+                qtyGroup.hide();
+                $('input[name="stok_saat_ini"]').val(0);
+            } else {
+                bomSection.hide();
+                qtyGroup.show();
             }
-            document.getElementById('variant_dimensions').value = JSON.stringify(vars);
+        });
+
+        // Toggle Folder vs Item
+        $('input[name="type"]').on('change', function() {
+            $('#item_exclusive_fields').toggle(this.value === 'item');
+        });
+
+        // Toggle Varian
+        $('#has_variants').on('change', function() {
+            $('#variant_section').toggle(this.checked);
+        });
+
+        // FUNGSI TAMBAH MATERIAL (SELECT2 AJAX)
+        $('#add_material_btn').on('click', function() {
+            const rowId = 'mat-' + Date.now();
+            const html = `
+                <div class="row g-2 mb-2 material-row" id="${rowId}">
+                    <div class="col-7">
+                        <select class="form-select mat-id shadow-sm" required></select>
+                    </div>
+                    <div class="col-3">
+                        <input type="number" step="0.01" class="form-control mat-qty shadow-sm" placeholder="Qty" required>
+                    </div>
+                    <div class="col-2">
+                        <button type="button" class="btn btn-danger w-100" onclick="$('#${rowId}').remove()"><i class="fas fa-times"></i></button>
+                    </div>
+                </div>`;
+
+            $('#bom_rows').append(html);
+
+            // Inisialisasi Select2 pada baris yang baru dibuat
+            $(`#${rowId} .mat-id`).select2({
+                theme: 'bootstrap-5',
+                placeholder: 'Cari bahan baku...',
+                minimumInputLength: 2,
+                ajax: {
+                    url: "{{ route('item.search.ajax') }}",
+                    dataType: 'json',
+                    delay: 250,
+                    data: function(params) { return { q: params.term }; },
+                    processResults: function(data) { return data; },
+                    cache: true
+                }
+            });
+        });
+
+        // Tambah Varian Row
+        $('#add_variant_btn').on('click', function() {
+            const html = `
+                <div class="row g-2 mb-2 variant-row">
+                    <div class="col-5"><input type="text" class="form-control var-name shadow-sm" placeholder="Contoh: Ukuran"></div>
+                    <div class="col-5"><input type="text" class="form-control var-options shadow-sm" placeholder="S,M,L"></div>
+                    <div class="col-2"><button type="button" class="btn btn-danger w-100" onclick="$(this).parent().parent().remove()"><i class="fas fa-times"></i></button></div>
+                </div>`;
+            $('#variant_rows').append(html);
+        });
+
+        // PRE-SUBMIT LOGIC (Kumpulkan data JSON)
+        $('#mainForm').on('submit', function() {
+            const mats = [];
+            $('.material-row').each(function() {
+                const id = $(this).find('.mat-id').val();
+                const qty = $(this).find('.mat-qty').val();
+                if(id && qty) mats.push({ item_id: id, qty: qty });
+            });
+            $('#materials_data').val(JSON.stringify(mats));
+
+            if($('#has_variants').is(':checked')) {
+                const vars = [];
+                $('.variant-row').each(function() {
+                    vars.push({ name: $(this).find('.var-name').val(), options: $(this).find('.var-options').val() });
+                });
+                $('#variant_dimensions').val(JSON.stringify(vars));
+            }
         });
     });
 </script>
