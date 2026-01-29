@@ -27,5 +27,10 @@ Gue ingin loe jangan ngoding dulu, coba fokus jelasin bagaimana solusi cara kerj
 Sedari awal, tabel Item itu untuk Item dan BOM, bukan buat folder.  Gue mau Tags digunakan sebagai keterangan tambahan Item/Bom tersebut, bukan sebagai identitas folder. Gue juga ga mau ada folder_id dan folder_parent dalam tabel Items, toh itu bukan tabel buat folder. Gue juga heran buat apa itu parent_id? Selama gue bikin folder, gak pernah berisi itu kolom. Buat kolom path dalam tabel item, mungkin masih bisa kita pake buat simpan path item/BOM, toh aku juga heran gimana loe ngesih alamat path pada item/BOM yang dimasukkan ke folder padahal sebelumnya belum ada kolom path/kolom pathnya null.
 
 
-6. 
+6. gue tes import 60k data dumX. berhasil, folder dumX berisi 60k data. Tapi counter item dan folder di card dumX masih 0. Gue tambah data manual 1, counter item bbertambah jadi 1. Seharusnya 60001 karena ada 60k item lain di situ. Gue coba bikin folder sendiri dalam dumX, counter folder gak bertambah
 
+7. - kalau emang gak bisa render 900k data dengan cepat, yaudah kita kembali ke endless scroll aja, tapi gue tetep mau user punya utilitas penuh untuk select seluruh data ataupun select data spesifi. Menurut gue solusinya, setelah terinspirasi sistem query sql, adalah dengan menyediakan tombol khusus buat select all item in folder walaupun data tersebut tidak dirender, fitur filter advance + select all filtered item + indikator berapa jumlah data hasil filter..
+
+8. - kalau emang gak bisa render 900k data dengan cepat, yaudah kita kembali ke endless scroll aja, tapi gue tetep mau user punya utilitas penuh untuk select seluruh data ataupun select data spesifi. Menurut gue solusinya, setelah terinspirasi sistem query sql, adalah dengan menyediakan tombol khusus buat select all item in folder walaupun data tersebut tidak dirender, fitur filter advance + select all filtered item + indikator berapa jumlah data hasil filter..
+
+9. 

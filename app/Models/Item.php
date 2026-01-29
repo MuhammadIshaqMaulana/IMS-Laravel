@@ -61,4 +61,28 @@ class Item extends Model
     {
         return $this->hasMany(Transaksi::class, 'item_id');
     }
+
+    protected static function booted()
+    {
+        static::created(function ($item) {
+            if ($item->folder_id) {
+                \App\Models\Folder::where('id', $item->folder_id)->increment('items_count');
+            }
+        });
+
+        static::deleted(function ($item) {
+            if ($item->folder_id) {
+                \App\Models\Folder::where('id', $item->folder_id)
+                    ->where('items_count', '>', 0)
+                    ->decrement('items_count');
+            }
+        });
+
+        static::restored(function ($item) {
+            if ($item->folder_id) {
+                \App\Models\Folder::where('id', $item->folder_id)->increment('items_count');
+            }
+        });
+    }
+
 }

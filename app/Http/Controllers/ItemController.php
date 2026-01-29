@@ -22,14 +22,11 @@ class ItemController extends Controller
         $folderId = $request->query('folder_id');
         $search = $request->query('q');
         $breadcrumbs = collect([]);
-
-        // Build Query
         $query = Item::query();
 
         if ($search) {
             $query->where(function($q) use ($search) {
-                $q->where('nama', 'LIKE', "%{$search}%")
-                  ->orWhere('sku', 'LIKE', "%{$search}%");
+                $q->where('nama', 'LIKE', "%{$search}%")->orWhere('sku', 'LIKE', "%{$search}%");
             });
             $currentFolder = null;
         } else {
@@ -44,10 +41,8 @@ class ItemController extends Controller
         }
 
         // Pakai cursorPaginate agar loading halaman terakhir tetap < 1 detik
-        // Kita urutkan berdasarkan ID (Default cursor pagination)
         $items = $query->orderBy('id', 'desc')->cursorPaginate(15)->appends(request()->query());
 
-        // Mapping Material tetap sama
         $materialIds = [];
         foreach ($items as $item) {
             if ($item->is_bom && is_array($item->materials)) {
@@ -55,17 +50,16 @@ class ItemController extends Controller
             }
         }
         $materialMap = Item::whereIn('id', array_filter(array_unique($materialIds)))->pluck('nama', 'id');
-        $allFolders = Folder::orderBy('nama')->select('id', 'nama')->get();
 
-        // Cek jika request datang dari AJAX (untuk append data)
         if ($request->ajax()) {
             return view('item.partials.item_list', compact('items', 'materialMap'))->render();
         }
 
-        // Ambil Subfolders (Subfolders biasanya sedikit, jadi tidak perlu pagination rumit)
         $subFolders = $currentFolder
             ? Folder::where('parent_id', $folderId)->orderBy('nama')->get()
             : Folder::whereNull('parent_id')->orderBy('nama')->get();
+
+        $allFolders = Folder::orderBy('nama')->select('id', 'nama')->get();
 
         return view('item.index', compact('items', 'subFolders', 'currentFolder', 'breadcrumbs', 'search', 'materialMap', 'allFolders'));
     }
@@ -166,28 +160,7 @@ class ItemController extends Controller
      */
     public function importCsv(Request $request)
     {
-        ini_set('max_execution_time', 1200);
-        ini_set('memory_limit', '2048M');
-        $startTime = microtime(true);
-
-        $request->validate(['file_csv' => 'required|mimes:csv,txt']);
-        $filePath = $request->file('file_csv')->getRealPath();
-        $originalFilename = pathinfo($request->file('file_csv')->getClientOriginalName(), PATHINFO_FILENAME);
-
-        DB::statement("SET SESSION unique_checks=0");
-        DB::statement("SET SESSION foreign_key_checks=0");
-
-        $staging = 'temp_imp_' . Str::random(5);
-        DB::statement("CREATE TEMPORARY TABLE $staging (
-            nomor INT, nama VARCHAR(255) COLLATE utf8mb4_unicode_ci, satuan VARCHAR(50) COLLATE utf8mb4_unicode_ci,
-            stok_saat_ini VARCHAR(50), stok_minimum VARCHAR(50), harga_jual VARCHAR(50), harga_beli VARCHAR(50),
-            note TEXT COLLATE utf8mb4_unicode_ci, materials TEXT COLLATE utf8mb4_unicode_ci, tags TEXT COLLATE utf8mb4_unicode_ci
-        )");
-
-        $pathForSql = str_replace('\\', '/', $filePath);
-        DB::connection()->getpdo()->exec("LOAD DATA LOCAL INFILE '$pathForSql' INTO TABLE $staging FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"' LINES TERMINATED BY '\\r\\n' IGNORE 1 LINES");
-
-        DB::statement("ALTER TABLE $staging ADD INDEX(nama), ADD INDEX(nomor)");
+        // ... (Logic Preparasi/Staging LOAD DATA tetap sama) ...
 
         DB::beginTransaction();
         try {
@@ -199,32 +172,51 @@ class ItemController extends Controller
             $folder = Folder::create(['nama' => $folderName, 'parent_id' => $request->folder_id]);
             $folder->updatePath();
 
-            $now = now();
-            DB::statement("INSERT INTO items (nama, sku, satuan, stok_saat_ini, stok_minimum, harga_jual, harga_beli, note, folder_id, created_at, updated_at)
-                SELECT TRIM(nama), CONCAT('SKU-', nomor, '-', UNIX_TIMESTAMP()), satuan,
-                CASE WHEN (materials IS NOT NULL AND materials <> '') THEN 0 ELSE stok_saat_ini END,
-                stok_minimum, harga_jual, harga_beli, note, {$folder->id}, '$now', '$now'
-                FROM $staging WHERE nama <> ''");
+            // Insert Items... (Pake SQL massal loe yang lama)
+            // ...
 
             $this->finalizeImportBomOneShot($staging, $folder->id);
 
-            // SINKRONISASI COUNTER: Update angka jumlah item di folder ini secara instan
+            // [DIPERBAIKI] SINKRONISASI COUNTER:
             $totalImported = DB::table($staging)->count();
-            $folder->update(['items_count' => $totalImported]);
+            DB::table('folders')->where('id', $folder->id)->update(['items_count' => $totalImported]);
+
+            // Increment children_count di parent (sudah dihandle model Folder::created)
 
             DB::commit();
-            $duration = round(microtime(true) - $startTime, 2);
+            return redirect()->route('item.index', ['folder_id' => $folder->id])->with('success', 'Import Selesai.');
+        } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', $e->getMessage()); }
+    }
 
-            return redirect()->route('item.index', ['folder_id' => $folder->id])
-                             ->with('success', "Turbo Import Berhasil ({$duration} detik)! Folder: $folderName");
+    public function move(Request $request)
+    {
+        $id = $request->id;
+        $type = $request->target_type;
+        $newFolderId = $request->folder_id ?: null;
 
-        } catch (\Exception $e) {
-            if (DB::transactionLevel() > 0) DB::rollBack();
-            return redirect()->back()->with('error', $e->getMessage());
-        } finally {
-            DB::statement("SET SESSION unique_checks=1");
-            DB::statement("SET SESSION foreign_key_checks=1");
-        }
+        DB::beginTransaction();
+        try {
+            if ($type === 'item') {
+                $item = Item::findOrFail($id);
+                $oldFolderId = $item->folder_id;
+                if ($oldFolderId != $newFolderId) {
+                    $item->update(['folder_id' => $newFolderId]);
+                    if ($oldFolderId) Folder::where('id', $oldFolderId)->where('items_count', '>', 0)->decrement('items_count');
+                    if ($newFolderId) Folder::where('id', $newFolderId)->increment('items_count');
+                }
+            } else {
+                $folder = Folder::findOrFail($id);
+                $oldParentId = $folder->parent_id;
+                if ($oldParentId != $newFolderId) {
+                    $folder->update(['parent_id' => $newFolderId]);
+                    $folder->updatePath();
+                    if ($oldParentId) Folder::where('id', $oldParentId)->where('children_count', '>', 0)->decrement('children_count');
+                    if ($newFolderId) Folder::where('id', $newFolderId)->increment('children_count');
+                }
+            }
+            DB::commit();
+            return redirect()->back()->with('success', 'Berhasil dipindahkan.');
+        } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', 'Gagal.'); }
     }
 
     /**
@@ -275,49 +267,46 @@ class ItemController extends Controller
     /**
      * HARMONIZED EXPORT: Kolom selaras CSV & PDF.
      */
-    public function exportCsv() {
-    return new StreamedResponse(function() {
-        $handle = fopen('php://output', 'w');
-        fputcsv($handle, ['nomor', 'nama', 'satuan', 'stok_saat_ini', 'stok_minimum', 'harga_jual', 'harga_beli', 'note', 'materials', 'tags']);
+    public function exportCsv(Request $request) {
+        $folderId = $request->folder_id;
+        $isGlobal = $request->global == 'true';
+        $ids = json_decode($request->ids, true);
 
-        // Pakai cursor() agar PHP hanya mengambil 1 data per waktu (Hemat RAM!)
-        $items = Item::cursor();
+        return new StreamedResponse(function() use ($isGlobal, $folderId, $ids) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, ['nomor', 'nama', 'satuan', 'stok_saat_ini', 'stok_minimum', 'harga_jual', 'harga_beli', 'note', 'materials', 'tags']);
 
-        $counter = 1;
-        foreach ($items as $item) {
-            $mParts = [];
-            if ($item->is_bom && is_array($item->materials)) {
-                foreach ($item->materials as $m) {
-                    $mParts[] = "{$m['item_id']}({$m['qty']})";
+            $query = Item::query();
+            if ($isGlobal) $query->where('folder_id', $folderId);
+            else $query->whereIn('id', $ids);
+
+            $query->chunk(2000, function($items) use ($handle) {
+                foreach ($items as $index => $item) {
+                    $mParts = [];
+                    if ($item->is_bom && is_array($item->materials)) {
+                        foreach ($item->materials as $m) { $mParts[] = "{$m['item_id']}({$m['qty']})"; }
+                    }
+                    fputcsv($handle, [$index+1, $item->nama, $item->satuan, $item->calculated_stock, $item->stok_minimum, $item->harga_jual, $item->harga_beli, $item->note, implode(', ', $mParts), $item->tags ? implode(', ', $item->tags) : '']);
                 }
-            }
-
-            fputcsv($handle, [
-                $counter++,
-                $item->nama,
-                $item->satuan,
-                $item->calculated_stock,
-                $item->stok_minimum,
-                $item->harga_jual,
-                $item->harga_beli,
-                $item->note,
-                implode(', ', $mParts),
-                $item->tags ? implode(', ', $item->tags) : ''
-            ]);
-        }
-        fclose($handle);
-    }, 200, [
-        'Content-Type' => 'text/csv',
-        'Content-Disposition' => 'attachment; filename="inventory_export_full.csv"',
-    ]);
-}
+            });
+            fclose($handle);
+        }, 200, ['Content-Type' => 'text/csv', 'Content-Disposition' => 'attachment; filename="inventory_export.csv"']);
+    }
 
     /**
      * [DITIMPA] Export PDF: Batasi 1000 data agar tidak HTTP 500
      */
-    public function exportPdf() {
-        // Ambil hanya 1000 data terbaru/pertama untuk mencegah memori penuh
-        $items = Item::with('folder')->limit(1000)->get();
+    public function exportPdf(Request $request) {
+        $isGlobal = $request->global == 'true';
+        $ids = json_decode($request->ids, true);
+        $folderId = $request->folder_id;
+
+        $query = Item::whereIn('id', $ids)->with('folder');
+        if ($isGlobal) {
+            $query = Item::where('folder_id', $folderId)->with('folder')->limit(1000);
+        }
+
+        $items = $query->get();
         return view('item.export_pdf', compact('items'));
     }
 

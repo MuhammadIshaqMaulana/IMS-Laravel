@@ -56,4 +56,22 @@ class Folder extends Model
         $ancestorIds = explode('/', $this->path);
         return in_array((string)$folderId, $ancestorIds);
     }
+
+    protected static function booted()
+    {
+        static::created(function ($folder) {
+            if ($folder->parent_id) {
+                \App\Models\Folder::where('id', $folder->parent_id)->increment('children_count');
+            }
+        });
+
+        static::deleted(function ($folder) {
+            if ($folder->parent_id) {
+                \App\Models\Folder::where('id', $folder->parent_id)
+                    ->where('children_count', '>', 0)
+                    ->decrement('children_count');
+            }
+        });
+    }
+
 }
