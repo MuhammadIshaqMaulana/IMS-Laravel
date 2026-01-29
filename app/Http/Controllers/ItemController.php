@@ -15,13 +15,31 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class ItemController extends Controller
 {
     /**
-     * [DITIMPA] Tampilan Utama: Menggunakan Cursor Pagination untuk Endless Scroll.
+     * [DITIMPA] Index dengan Full Sorting & Seamless Cursor Pagination (25 Item)
      */
     public function index(Request $request)
     {
         $folderId = $request->query('folder_id');
         $search = $request->query('q');
-        $breadcrumbs = collect([]);
+        $breadcrumbs = collect([]); // FIXED: Inisialisasi awal agar tidak error
+
+        // LOGIKA SORTING LENGKAP [DIPERBARUI]
+        $sortField = $request->query('sort', 'id');
+        $sortOrder = $request->query('order', 'desc');
+
+        $validSorts = [
+            'name'      => 'nama',
+            'created'   => 'created_at',
+            'updated'   => 'updated_at',
+            'stock'     => 'stok_saat_ini',
+            'min_stock' => 'stok_minimum',
+            'buy'       => 'harga_beli',
+            'sell'      => 'harga_jual',
+            'id'        => 'id'
+        ];
+
+        $dbSortField = $validSorts[$sortField] ?? 'id';
+
         $query = Item::query();
 
         if ($search) {
@@ -40,9 +58,13 @@ class ItemController extends Controller
             }
         }
 
-        // Pakai cursorPaginate agar loading halaman terakhir tetap < 1 detik
-        $items = $query->orderBy('id', 'desc')->cursorPaginate(15)->appends(request()->query());
+        // Pakai cursorPaginate limit 25 item
+        // Note: Laravel otomatis nambahin ID as tie-breaker buat sorting yang gak unik
+        $items = $query->orderBy($dbSortField, $sortOrder)
+                       ->cursorPaginate(25)
+                       ->appends($request->query());
 
+        // Mapping Material Preview (Hanya 25 item terpilih)
         $materialIds = [];
         foreach ($items as $item) {
             if ($item->is_bom && is_array($item->materials)) {

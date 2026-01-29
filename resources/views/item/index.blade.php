@@ -4,7 +4,7 @@
 
 @section('content')
 <div class="h-100 d-flex flex-column">
-    <!-- [TETAP] ATAS: BREADCRUMBS & PENCARIAN GLOBAL -->
+    <!-- BREADCRUMBS & SEARCH (INLINE - NO INCLUDE) -->
     <div class="mb-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <nav aria-label="breadcrumb">
@@ -16,6 +16,7 @@
                 </ol>
             </nav>
             <form action="{{ route('item.index') }}" method="GET" class="d-flex" style="width: 320px;">
+                <input type="hidden" name="folder_id" value="{{ request('folder_id') }}">
                 <div class="input-group input-group-sm shadow-sm">
                     <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
                     <input type="text" name="q" class="form-control border-start-0 shadow-none" placeholder="Cari..." value="{{ $search }}">
@@ -28,14 +29,37 @@
                 <i class="fas {{ $currentFolder ? 'fa-folder-open text-warning' : 'fa-boxes text-brown' }} me-2"></i>
                 {{ $currentFolder ? $currentFolder->nama : 'Inventaris Utama' }}
             </h2>
+
             <div class="d-flex gap-2">
-                <button class="btn btn-outline-success fw-bold shadow-sm px-3" data-bs-toggle="modal" data-bs-target="#importModal"><i class="fas fa-file-import me-1"></i> Import</button>
-                <a href="{{ route('item.create', ['folder_id' => request('folder_id')]) }}" class="btn btn-primary px-4 fw-bold shadow-sm">+ Tambah Baru</a>
+                <!-- DROPDOWN SORTING LENGKAP -->
+                <div class="dropdown">
+                    <button class="btn btn-light btn-sm border dropdown-toggle fw-bold shadow-sm px-3" type="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-sort-amount-down me-1"></i> Urutkan
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="min-width: 200px;">
+                        <li><h6 class="dropdown-header">Nama</h6></li>
+                        <li><a class="dropdown-item py-1" href="{{ request()->fullUrlWithQuery(['sort' => 'name', 'order' => 'asc']) }}"><i class="fas fa-sort-alpha-down me-2 opacity-50"></i> Nama A-Z</a></li>
+                        <li><a class="dropdown-item py-1" href="{{ request()->fullUrlWithQuery(['sort' => 'name', 'order' => 'desc']) }}"><i class="fas fa-sort-alpha-up me-2 opacity-50"></i> Nama Z-A</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><h6 class="dropdown-header">Waktu</h6></li>
+                        <li><a class="dropdown-item py-1" href="{{ request()->fullUrlWithQuery(['sort' => 'created', 'order' => 'desc']) }}"><i class="fas fa-clock me-2 opacity-50"></i> Baru Dibuat</a></li>
+                        <li><a class="dropdown-item py-1" href="{{ request()->fullUrlWithQuery(['sort' => 'updated', 'order' => 'desc']) }}"><i class="fas fa-history me-2 opacity-50"></i> Baru Diupdate</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><h6 class="dropdown-header">Stok & Harga</h6></li>
+                        <li><a class="dropdown-item py-1" href="{{ request()->fullUrlWithQuery(['sort' => 'stock', 'order' => 'desc']) }}"><i class="fas fa-cubes me-2 opacity-50"></i> Stok Terbanyak</a></li>
+                        <li><a class="dropdown-item py-1" href="{{ request()->fullUrlWithQuery(['sort' => 'min_stock', 'order' => 'asc']) }}"><i class="fas fa-exclamation-circle me-2 opacity-50"></i> Stok Kritis</a></li>
+                        <li><a class="dropdown-item py-1" href="{{ request()->fullUrlWithQuery(['sort' => 'buy', 'order' => 'desc']) }}"><i class="fas fa-tag me-2 opacity-50"></i> Harga Beli Termahal</a></li>
+                        <li><a class="dropdown-item py-1" href="{{ request()->fullUrlWithQuery(['sort' => 'sell', 'order' => 'desc']) }}"><i class="fas fa-money-bill-wave me-2 opacity-50"></i> Harga Jual Termahal</a></li>
+                    </ul>
+                </div>
+
+                <button class="btn btn-outline-success btn-sm fw-bold shadow-sm px-3" data-bs-toggle="modal" data-bs-target="#importModal">Import</button>
+                <a href="{{ route('item.create', ['folder_id' => request('folder_id')]) }}" class="btn btn-primary btn-sm px-3 fw-bold shadow-sm">+ Tambah Baru</a>
             </div>
         </div>
     </div>
 
-        <!-- [BARU] GLOBAL SELECTION BAR -->
+    <!-- SELECTION BARS (Gmail Style) -->
     <div id="globalSelectBar" class="alert alert-info py-2 mb-3 text-center shadow-sm" style="display: none; font-size: 0.85rem;">
         Halaman ini terpilih. <a href="javascript:void(0)" onclick="setGlobalSelect(true)" class="fw-bold text-decoration-underline">Pilih seluruh data di folder ini</a>
     </div>
@@ -43,7 +67,7 @@
         <i class="fas fa-globe me-2"></i> Seluruh data dalam folder ini telah terpilih. <a href="javascript:void(0)" onclick="setGlobalSelect(false)" class="fw-bold text-decoration-underline">Batalkan Pilihan Global</a>
     </div>
 
-    <!-- [DITIMPA] BULK ACTIONS TOOLBAR -->
+    <!-- BULK ACTIONS TOOLBAR -->
     <div id="bulkActions" class="bg-dark text-white p-2 mb-3 rounded shadow-lg border border-warning sticky-top" style="display: none; z-index: 1000;">
         <div class="d-flex justify-content-between align-items-center px-2">
             <div class="d-flex align-items-center gap-3">
@@ -63,6 +87,7 @@
         </div>
     </div>
 
+    <!-- GRID UTAMA -->
     <div class="row overflow-y-auto flex-grow-1 g-4 pb-5" id="inventoryGrid">
         @foreach($subFolders as $folder)
             <div class="col-xl-3 col-lg-4 col-md-6">
@@ -92,8 +117,8 @@
         </div>
         @endif
 
-        <!-- [BARU] SENTINEL (Pemicu Scroll) -->
-        <div id="load-more-sentinel" class="col-12 text-center py-4" style="{{ $items->hasMorePages() ? '' : 'display: none;' }}">
+        <!-- SENTINEL (LOAD MORE TRIGGER) -->
+        <div id="load-more-sentinel" class="col-12 text-center py-5" style="{{ $items->hasMorePages() ? '' : 'display: none;' }}">
             <div class="spinner-border text-primary" role="status"></div>
         </div>
     </div>
@@ -144,15 +169,56 @@
 @include('item.modals')
 
 <script>
-let isGlobalSelect = false;
+    let isGlobalSelect = false;
 
     document.addEventListener('DOMContentLoaded', function() {
-        const selectAll = document.getElementById('selectAllItems');
-        const bulkBar = document.getElementById('bulkActions');
-        const countSpan = document.getElementById('selectedCount');
-        const globalBar = document.getElementById('globalSelectBar');
-        const globalActiveBar = document.getElementById('globalSelectedActive');
+        // --- SEAMLESS ENDLESS SCROLL LOGIC ---
+        let nextUrl = document.querySelector('.next-page-url')?.dataset.url;
+        const itemsContainer = document.getElementById('items-container');
+        const sentinel = document.getElementById('load-more-sentinel');
+        let isLoading = false;
 
+        const observer = new IntersectionObserver((entries) => {
+            // Threshold 0.1 & rootMargin 400px: load data saat user masih 400px di atas sentinel
+            if (entries[0].isIntersecting && nextUrl && !isLoading) {
+                loadMore();
+            }
+        }, {
+            threshold: 0.1,
+            rootMargin: '400px'
+        });
+
+        if (sentinel) observer.observe(sentinel);
+
+        async function loadMore() {
+            isLoading = true;
+            try {
+                const response = await fetch(nextUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                const html = await response.text();
+
+                const oldMarker = document.querySelector('.next-page-url');
+                if (oldMarker) oldMarker.remove();
+
+                itemsContainer.insertAdjacentHTML('beforeend', html);
+
+                const newMarker = document.querySelector('.next-page-url');
+                nextUrl = newMarker ? newMarker.dataset.url : null;
+
+                if (!nextUrl) sentinel.style.display = 'none';
+
+                // Re-init tooltips & selection logic for new elements
+                const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                tooltipTriggerList.map(function (el) { return new bootstrap.Tooltip(el); });
+
+                if(isGlobalSelect) {
+                    document.querySelectorAll('.item-checkbox').forEach(c => c.checked = true);
+                }
+
+            } catch (error) { console.error("Scroll error:", error); }
+            finally { isLoading = false; }
+        }
+
+        // Selection Logic Delegation (TETAP)
         document.addEventListener('change', function(e) {
             if (e.target.classList.contains('item-checkbox') || e.target.id === 'selectAllItems') {
                 if (e.target.id === 'selectAllItems') {
@@ -165,38 +231,34 @@ let isGlobalSelect = false;
         function updateUI() {
             const checkedCount = document.querySelectorAll('.item-checkbox:checked').length;
             const totalOnPage = document.querySelectorAll('.item-checkbox').length;
+            document.getElementById('bulkActions').style.display = checkedCount > 0 ? 'block' : 'none';
+            document.getElementById('selectedCount').textContent = isGlobalSelect ? "Seluruh Data Terpilih" : `${checkedCount} Terpilih`;
 
-            bulkBar.style.display = checkedCount > 0 ? 'block' : 'none';
-            countSpan.textContent = isGlobalSelect ? "Seluruh Data Terpilih" : `${checkedCount} Terpilih`;
-
-            // Gmail style notice
             if (checkedCount === totalOnPage && totalOnPage > 0 && !isGlobalSelect) {
-                globalBar.style.display = 'block';
+                document.getElementById('globalSelectBar').style.display = 'block';
             } else {
-                globalBar.style.display = 'none';
+                document.getElementById('globalSelectBar').style.display = 'none';
             }
         }
 
         window.setGlobalSelect = function(val) {
             isGlobalSelect = val;
-            globalBar.style.display = 'none';
-            globalActiveBar.style.display = val ? 'block' : 'none';
+            document.getElementById('globalSelectBar').style.display = 'none';
+            document.getElementById('globalSelectedActive').style.display = val ? 'block' : 'none';
+            if(!val) {
+                document.getElementById('selectAllItems').checked = false;
+                document.querySelectorAll('.item-checkbox').forEach(c => c.checked = false);
+            }
             updateUI();
         }
     });
 
     function exportSelected(format) {
         const ids = Array.from(document.querySelectorAll('.item-checkbox:checked')).map(cb => cb.dataset.itemId);
-
-        if (!isGlobalSelect && format === 'pdf' && ids.length > 1000) {
-            alert("Maksimal PDF 1000 item. Kamu memilih " + ids.length + ". Kurangi atau pakai CSV.");
-            return;
-        }
-
+        if (!isGlobalSelect && format === 'pdf' && ids.length > 1000) { alert("Maksimal PDF 1000 item."); return; }
         const form = document.getElementById('exportForm');
         document.getElementById('exportIds').value = JSON.stringify(ids);
         document.getElementById('exportGlobal').value = isGlobalSelect;
-
         form.action = format === 'csv' ? "{{ route('item.export.csv') }}" : "{{ route('item.export.pdf') }}";
         if(format === 'pdf') form.target = "_blank";
         form.submit();

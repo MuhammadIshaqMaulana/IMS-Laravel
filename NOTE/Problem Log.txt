@@ -33,4 +33,18 @@ Sedari awal, tabel Item itu untuk Item dan BOM, bukan buat folder.  Gue mau Tags
 
 8. - kalau emang gak bisa render 900k data dengan cepat, yaudah kita kembali ke endless scroll aja, tapi gue tetep mau user punya utilitas penuh untuk select seluruh data ataupun select data spesifi. Menurut gue solusinya, setelah terinspirasi sistem query sql, adalah dengan menyediakan tombol khusus buat select all item in folder walaupun data tersebut tidak dirender, fitur filter advance + select all filtered item + indikator berapa jumlah data hasil filter..
 
-9. 
+9. - oke bro global selectionnya udah berfungsi.
+
+- gue mau fitur sort by name, created at, updated at, stok, stok min, harga beli, harga jual .ascend & descend
+
+- gue ingin item show.blade.php menampilkan juga tanggal created at & updated at
+
+- gue mau endless scroll seamless, kayaknya naikkan rendernya jadi sekitar 25 item, terus sebelum user sampai ke ujung render, sistem udah render data lagi.
+
+10. - fitur ascending descending masih belum loe terapkan dengan maksimal, hanya nama yang bisa acending descending. Gue mau isi dropdown sort bagian nama cukup dibuat 1 saja, lalu loe buatkan dropdown 1 lagi untuk memilih ascending atau descending agar name, created at, updated at, stok, stok min, harga beli, dan harga jual bisa disort secara ascending atau descending. Gak usah pake icon.
+
+- bro, sejauh ini fitur aplikasi udah cukup bagus. Sekarang ayo kita fokus upgrade Pencatatan transaksi recent activity. Seperti catat kejadian import, nama file, dan jumlah datanya. catat setiap CRUD yang terjadi. Catat juga bulk CRUD dengan format jumah data yang dibulk CRUD, jika itu update, fitur apa yang diupdate dan valuenya, dan lokasi folder kejadiannya. Catat juga perpindahan items atau folder dari mana ke mana.
+
+- sediakan tombol bulk delete di sebelah edit data ketika user select items, kembalikan juga tombol clone data yang hilang.
+
+11. 

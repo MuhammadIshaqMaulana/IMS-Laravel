@@ -109,6 +109,17 @@
                             @endif
                         </div>
                     </div>
+                    <!-- [BARU] TIMESTAMP SECTION -->
+                    <div class="border-top pt-3 mt-auto">
+                        <div class="d-flex justify-content-between small text-muted mb-1">
+                            <span>Dibuat:</span>
+                            <span class="fw-bold">{{ $item->created_at->format('d M Y, H:i') }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between small text-muted">
+                            <span>Diupdate:</span>
+                            <span class="fw-bold">{{ $item->updated_at->format('d M Y, H:i') }}</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
