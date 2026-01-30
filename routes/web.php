@@ -29,6 +29,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('item/bulk-update', [ItemController::class, 'bulkUpdate'])->name('item.bulk-update');
     Route::post('item/bulk-clone', [ItemController::class, 'bulkClone'])->name('item.bulk-clone');
     Route::post('item/bulk-update-quantity', [ItemController::class, 'bulkUpdateQuantity'])->name('item.bulk-update-quantity');
+    Route::delete('/item/bulk-delete', [ItemController::class, 'bulkDelete'])->name('item.bulk-delete');
 
     Route::resource('item', ItemController::class);
     Route::post('item/{item}/update-quantity', [ItemController::class, 'updateQuantity'])->name('item.update-quantity');

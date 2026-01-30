@@ -4,7 +4,7 @@
 
 @section('content')
 <div class="h-100 d-flex flex-column">
-    <!-- BREADCRUMBS & SEARCH (INLINE - NO INCLUDE) -->
+    <!-- ATAS: BREADCRUMBS & SEARCH -->
     <div class="mb-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <nav aria-label="breadcrumb">
@@ -31,30 +31,25 @@
             </h2>
 
             <div class="d-flex gap-2">
-                <!-- DROPDOWN SORTING LENGKAP -->
-                <div class="dropdown">
-                    <button class="btn btn-light btn-sm border dropdown-toggle fw-bold shadow-sm px-3" type="button" data-bs-toggle="dropdown">
-                        <i class="fas fa-sort-amount-down me-1"></i> Urutkan
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="min-width: 200px;">
-                        <li><h6 class="dropdown-header">Nama</h6></li>
-                        <li><a class="dropdown-item py-1" href="{{ request()->fullUrlWithQuery(['sort' => 'name', 'order' => 'asc']) }}"><i class="fas fa-sort-alpha-down me-2 opacity-50"></i> Nama A-Z</a></li>
-                        <li><a class="dropdown-item py-1" href="{{ request()->fullUrlWithQuery(['sort' => 'name', 'order' => 'desc']) }}"><i class="fas fa-sort-alpha-up me-2 opacity-50"></i> Nama Z-A</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><h6 class="dropdown-header">Waktu</h6></li>
-                        <li><a class="dropdown-item py-1" href="{{ request()->fullUrlWithQuery(['sort' => 'created', 'order' => 'desc']) }}"><i class="fas fa-clock me-2 opacity-50"></i> Baru Dibuat</a></li>
-                        <li><a class="dropdown-item py-1" href="{{ request()->fullUrlWithQuery(['sort' => 'updated', 'order' => 'desc']) }}"><i class="fas fa-history me-2 opacity-50"></i> Baru Diupdate</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><h6 class="dropdown-header">Stok & Harga</h6></li>
-                        <li><a class="dropdown-item py-1" href="{{ request()->fullUrlWithQuery(['sort' => 'stock', 'order' => 'desc']) }}"><i class="fas fa-cubes me-2 opacity-50"></i> Stok Terbanyak</a></li>
-                        <li><a class="dropdown-item py-1" href="{{ request()->fullUrlWithQuery(['sort' => 'min_stock', 'order' => 'asc']) }}"><i class="fas fa-exclamation-circle me-2 opacity-50"></i> Stok Kritis</a></li>
-                        <li><a class="dropdown-item py-1" href="{{ request()->fullUrlWithQuery(['sort' => 'buy', 'order' => 'desc']) }}"><i class="fas fa-tag me-2 opacity-50"></i> Harga Beli Termahal</a></li>
-                        <li><a class="dropdown-item py-1" href="{{ request()->fullUrlWithQuery(['sort' => 'sell', 'order' => 'desc']) }}"><i class="fas fa-money-bill-wave me-2 opacity-50"></i> Harga Jual Termahal</a></li>
-                    </ul>
+                <!-- [DITIMPA] TAMPILAN DUAL DROPDOWN SORT (Tanpa Icon) -->
+                <div class="btn-group shadow-sm">
+                    <select class="form-select form-select-sm fw-bold border-end-0" onchange="location = this.value;" style="width: 130px; border-radius: 8px 0 0 8px;">
+                        <option value="{{ request()->fullUrlWithQuery(['sort' => 'name']) }}" {{ request('sort', 'name') == 'name' ? 'selected' : '' }}>Nama</option>
+                        <option value="{{ request()->fullUrlWithQuery(['sort' => 'created']) }}" {{ request('sort') == 'created' ? 'selected' : '' }}>Tgl Dibuat</option>
+                        <option value="{{ request()->fullUrlWithQuery(['sort' => 'updated']) }}" {{ request('sort') == 'updated' ? 'selected' : '' }}>Tgl Update</option>
+                        <option value="{{ request()->fullUrlWithQuery(['sort' => 'stock']) }}" {{ request('sort') == 'stock' ? 'selected' : '' }}>Stok</option>
+                        <option value="{{ request()->fullUrlWithQuery(['sort' => 'min_stock']) }}" {{ request('sort') == 'min_stock' ? 'selected' : '' }}>Stok Min</option>
+                        <option value="{{ request()->fullUrlWithQuery(['sort' => 'buy']) }}" {{ request('sort') == 'buy' ? 'selected' : '' }}>Hrg Beli</option>
+                        <option value="{{ request()->fullUrlWithQuery(['sort' => 'sell']) }}" {{ request('sort') == 'sell' ? 'selected' : '' }}>Hrg Jual</option>
+                    </select>
+                    <select class="form-select form-select-sm fw-bold" onchange="location = this.value;" style="width: 100px; border-radius: 0 8px 8px 0;">
+                        <option value="{{ request()->fullUrlWithQuery(['order' => 'asc']) }}" {{ request('order', 'asc') == 'asc' ? 'selected' : '' }}>Ascending</option>
+                        <option value="{{ request()->fullUrlWithQuery(['order' => 'desc']) }}" {{ request('order') == 'desc' ? 'selected' : '' }}>Descending</option>
+                    </select>
                 </div>
 
                 <button class="btn btn-outline-success btn-sm fw-bold shadow-sm px-3" data-bs-toggle="modal" data-bs-target="#importModal">Import</button>
-                <a href="{{ route('item.create', ['folder_id' => request('folder_id')]) }}" class="btn btn-primary btn-sm px-3 fw-bold shadow-sm">+ Tambah Baru</a>
+                <a href="{{ route('item.create', ['folder_id' => request('folder_id')]) }}" class="btn btn-primary btn-sm px-3 fw-bold shadow-sm">+ Tambah</a>
             </div>
         </div>
     </div>
@@ -67,7 +62,7 @@
         <i class="fas fa-globe me-2"></i> Seluruh data dalam folder ini telah terpilih. <a href="javascript:void(0)" onclick="setGlobalSelect(false)" class="fw-bold text-decoration-underline">Batalkan Pilihan Global</a>
     </div>
 
-    <!-- BULK ACTIONS TOOLBAR -->
+    <!-- [DITIMPA] BULK ACTIONS TOOLBAR (Clone & Delete Kembali) -->
     <div id="bulkActions" class="bg-dark text-white p-2 mb-3 rounded shadow-lg border border-warning sticky-top" style="display: none; z-index: 1000;">
         <div class="d-flex justify-content-between align-items-center px-2">
             <div class="d-flex align-items-center gap-3">
@@ -81,8 +76,10 @@
                 <button class="btn btn-sm btn-success fw-bold px-3" onclick="exportSelected('csv')">CSV</button>
                 <button class="btn btn-sm btn-danger fw-bold px-3" onclick="exportSelected('pdf')">PDF</button>
                 <div class="vr mx-1 opacity-25"></div>
-                <button class="btn btn-sm btn-info text-white fw-bold px-3" onclick="openBulkQtyModal()">Stok</button>
-                <button class="btn btn-sm btn-warning fw-bold text-dark px-3" onclick="openBulkModal()">Edit Data</button>
+                <button class="btn btn-sm btn-info fw-bold px-3" onclick="openBulkQtyModal()">Stok</button>
+                <button class="btn btn-sm btn-primary fw-bold px-3" onclick="openBulkCloneModal()">Clone</button>
+                <button class="btn btn-sm btn-warning fw-bold px-3" onclick="openBulkModal()">Edit</button>
+                <button class="btn btn-sm btn-outline-danger fw-bold px-3" onclick="openBulkDeleteModal()">Hapus</button>
             </div>
         </div>
     </div>
@@ -90,20 +87,26 @@
     <!-- GRID UTAMA -->
     <div class="row overflow-y-auto flex-grow-1 g-4 pb-5" id="inventoryGrid">
         @foreach($subFolders as $folder)
-            <div class="col-xl-3 col-lg-4 col-md-6">
-                <div class="card h-100 border-0 shadow-sm item-card">
-                    <a href="{{ route('item.index', ['folder_id' => $folder->id]) }}" class="text-decoration-none text-dark h-100 d-flex flex-column">
-                        <div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="height: 140px;"><i class="fas fa-folder fa-5x text-warning opacity-75"></i></div>
-                        <div class="card-body p-3 text-center">
-                            <h6 class="card-title text-truncate fw-bold mb-1">{{ $folder->nama }}</h6>
-                            <div class="d-flex justify-content-center gap-2">
-                                <span class="badge bg-light text-muted border fw-normal"><i class="fas fa-folder-open me-1 text-warning"></i> {{ $folder->children_count }}</span>
-                                <span class="badge bg-light text-muted border fw-normal"><i class="fas fa-box me-1 text-secondary"></i> {{ $folder->items_count }}</span>
-                            </div>
+        <div class="col-xl-3 col-lg-4 col-md-6">
+            <div class="card h-100 border-0 shadow-sm item-card">
+                <a href="{{ route('item.index', ['folder_id' => $folder->id]) }}" class="text-decoration-none text-dark h-100 d-flex flex-column">
+                    <div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="height: 140px;"><i class="fas fa-folder fa-5x text-warning opacity-75"></i></div>
+                    <div class="card-body p-3 text-center">
+                        <h6 class="card-title text-truncate fw-bold mb-1">{{ $folder->nama }}</h6>
+                        <div class="d-flex justify-content-center gap-2">
+                            <span class="badge bg-light text-muted border fw-normal">{{ $folder->children_count }} Folder</span>
+                            <span class="badge bg-light text-muted border fw-normal">{{ $folder->items_count }} Item</span>
                         </div>
-                    </a>
+                    </div>
+                </a>
+                <!-- TOMBOL AKSI FOLDER KEMBALI -->
+                <div class="card-footer bg-white border-0 pt-0 pb-3 px-3 d-flex gap-2">
+                    <button class="btn btn-outline-light btn-sm flex-grow-1 border text-dark" onclick="openEditFolderModal({{ $folder->id }}, '{{ $folder->nama }}')"><i class="fas fa-pen"></i></button>
+                    <button class="btn btn-outline-light btn-sm flex-grow-1 border text-dark" onclick="openMoveModal('folder', {{ $folder->id }}, '{{ $folder->nama }}')"><i class="fas fa-external-link-alt"></i></button>
+                    <button class="btn btn-outline-danger btn-sm flex-grow-1 border" onclick="openDeleteFolderModal({{ $folder->id }}, '{{ $folder->nama }}')"><i class="fas fa-trash"></i></button>
                 </div>
             </div>
+        </div>
         @endforeach
 
         <div class="row g-4 m-0 p-0" id="items-container">
@@ -142,6 +145,28 @@
         </form>
     </div>
 </div>
+
+<!-- Modal Bulk Delete (BARU) -->
+<div class="modal fade" id="bulkDeleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form action="{{ route('item.bulk-delete') }}" method="POST" id="bulkDeleteForm">
+            @csrf @method('DELETE')
+            <input type="hidden" name="selected_items">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-danger text-white"><h5 class="fw-bold m-0">Konfirmasi Hapus Massal</h5></div>
+                <div class="modal-body p-4 text-center">
+                    <i class="fas fa-trash-alt fa-4x text-danger opacity-25 mb-3"></i>
+                    <p class="mb-0">Apakah Anda yakin ingin menghapus <strong id="deleteCountLabel">0</strong> data terpilih secara permanen?</p>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-light fw-bold" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-danger fw-bold px-4">Ya, Hapus Semua</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
 
 <!-- [DITIMPA] Modal Loading yang lebih universal -->
 <div class="modal fade" id="turboLoadingModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
@@ -262,6 +287,13 @@
         form.action = format === 'csv' ? "{{ route('item.export.csv') }}" : "{{ route('item.export.pdf') }}";
         if(format === 'pdf') form.target = "_blank";
         form.submit();
+    }
+
+    function openBulkDeleteModal() {
+        const ids = getCheckedIds();
+        document.querySelector('#bulkDeleteForm input[name="selected_items"]').value = JSON.stringify(ids);
+        document.getElementById('deleteCountLabel').textContent = ids.length;
+        new bootstrap.Modal(document.getElementById('bulkDeleteModal')).show();
     }
 
     // --- [BARU] SCRIPT BLOCKER & EXIT GUARD ---

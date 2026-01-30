@@ -86,18 +86,18 @@
                 <i class="fas fa-history me-2"></i> Aktivitas Terbaru (Produksi/Perakitan)
             </div>
             <div class="card-body">
-                 <ul class="list-group list-group-flush">
+                <ul class="list-group list-group-flush">
                     @forelse ($recentActivity as $activity)
                     <li class="list-group-item">
                         <small class="text-muted">{{ $activity->created_at->diffForHumans() }}</small><br>
-                        <strong>{{ Auth::user()->name }}</strong>
-                        <span class="text-success">merakit</span>
-                        <strong>{{ number_format($activity->jumlah_produksi, 0) }} unit</strong>
-                        Item
-                        <span class="text-primary">{{ $activity->itemProduksi->nama ?? 'Item Dihapus' }}</span>.
+                        @if($activity->item_id)
+                            <strong>{{ $activity->catatan }}</strong> pada item <span class="text-primary">{{ $activity->itemProduksi->nama ?? 'Item' }}</span>
+                        @else
+                            <i class="fas fa-info-circle text-info me-1"></i> {{ $activity->catatan }}
+                        @endif
                     </li>
                     @empty
-                        <div class="alert alert-info text-center">Belum ada transaksi produksi/perakitan yang dicatat.</div>
+                        <div class="alert alert-info text-center">Belum ada aktivitas.</div>
                     @endforelse
                 </ul>
             </div>

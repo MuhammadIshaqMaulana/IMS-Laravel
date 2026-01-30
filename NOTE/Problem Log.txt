@@ -47,4 +47,41 @@ Sedari awal, tabel Item itu untuk Item dan BOM, bukan buat folder.  Gue mau Tags
 
 - sediakan tombol bulk delete di sebelah edit data ketika user select items, kembalikan juga tombol clone data yang hilang.
 
-11. 
+
+11. - gue coba bulk move folder & clone items error bro:
+Illuminate\Database\QueryException
+vendor\laravel\framework\src\Illuminate\Database\Connection.php:824
+SQLSTATE[23000]: Integrity constraint violation: 1048 Column 'item_id' cannot be null (Connection: mysql, SQL: insert into `transaksis` (`item_id`, `jumlah_produksi`, `tanggal_produksi`, `catatan`, `updated_at`, `created_at`) values (?, 3, 2026-01-30 03:33:50, Bulk Update Satuan/Note pada 3 item., 2026-01-30 03:33:50, 2026-01-30 03:33:50))
+
+LARAVEL
+12.40.2
+PHP
+8.2.12
+UNHANDLED
+CODE 23000
+500
+POST
+http://ims-inventory.com/item/bulk-update
+
+Exception trace
+15 vendor frames
+
+App\Http\Controllers\ItemController->logActivity(null, integer, string)
+app\Http\Controllers\ItemController.php:391
+
+386
+387    /**
+388     * [BARU/DITIMPA] Helper Log: Simpan ke tabel transaksis
+389     */
+390    private function logActivity($itemId, $qty, $note) {
+391        Transaksi::create([
+
+- Gue coba import 900k data, gagal dengan pesan merah:  Undefined variable $staging
+
+- tombol yang ada di card folder yaitu move, rename, dan delete folder hilang bro
+
+
+12. - sistem pencarian yang kita punya sekarang itu hanya mencari secara global. Terkadang user pasti mau search spesifik di dalam suatu folder yang dia buka saja. Jadi tolong buatkan sistem pencarian spesifik bro.
+- sistem pencarian kita cukup pencarian spesifik aja bro. Jika user ingin pencarian global, user tinggal pindah ke root lalu mulai search disitu.
+- sepertinya di tabel transaksis, kita gak butuh kolom id_item & jumlah produksi, kita bisa mention id_item/id_folder serta jumlah item yang terpengaruh dalam text di kolom catatan, misal formatnya "(id_user) memindahkan (id_item) dari (id_folder) ke (id_folder)". dan misal format bulk "(id_user) update stok (jumlah item yang terpengaruh) item menjadi (kalau bertambah 7, berarti '+7'. Jika berkurang 5, berarti '-5') di folder (id_folder)". Kolom catatan memang menyimpan id, tapi pas ditampilkan ke UI, pastikan yang ditampilkan adalah nama dari pemilik id itu. untuk format bulk, semisal user update 900k data, itu lebih baik kita catat 900k id item itu di catatan, atau kita cukup sebut jumlah item target yaitu 900k sehingga id item tidak perlu kita simpan, atau seperti sortly kita pecah catatan 900k item itu sehingga mereka punya id catatan masing-masing. Tapi menurut loe gagasan gue bagus gak?
+

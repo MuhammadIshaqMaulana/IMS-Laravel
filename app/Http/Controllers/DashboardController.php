@@ -10,7 +10,7 @@ class DashboardController extends Controller
 {
     public function index()
     {
-        // 1. Inventory Summary
+
 
         $totalItems = Item::count();
         // Total Kuantitas hanya dihitung dari Item non-BOM (Material/Aset)
@@ -38,6 +38,7 @@ class DashboardController extends Controller
                                     ->get();
 
         return view('dashboard.index', compact(
+
             'totalItems',
             'totalQuantity',
             'totalValue',
