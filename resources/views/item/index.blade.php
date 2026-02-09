@@ -177,7 +177,7 @@
                      style="width: 4rem; height: 4rem; border-width: 0.4em;">
                 </div>
                 <h4 class="fw-bold mb-2">Sedang Memproses Data...</h4>
-                <p class="text-white-50 small mb-0">Sistem sedang mengolah ribuan data inventaris kamu.</p>
+                <p class="text-white-50 small mb-0">Sistem sedang memvalidasi dan mengolah data inventaris kamu.</p>
                 <div id="loadingTimer" class="fw-bold fs-4 text-white font-monospace mt-3">00:00</div>
             </div>
         </div>
@@ -296,7 +296,7 @@
         new bootstrap.Modal(document.getElementById('bulkDeleteModal')).show();
     }
 
-    // --- [BARU] SCRIPT BLOCKER & EXIT GUARD ---
+    // --- [TETAP] SCRIPT BLOCKER, TIMER & EXIT GUARD ---
     document.addEventListener('DOMContentLoaded', function() {
         const importForm = document.getElementById('turboImportForm');
         const loadingModalElement = document.getElementById('turboLoadingModal');
@@ -308,13 +308,14 @@
 
         if(importForm) {
             importForm.addEventListener('submit', function(e) {
-                // 1. Tampilkan loading modal & tutup modal input
+                // Tutup modal input, buka modal loading
                 const importModalEl = document.getElementById('importModal');
                 const importModalBus = bootstrap.Modal.getInstance(importModalEl);
                 if(importModalBus) importModalBus.hide();
+
                 loadingModal.show();
 
-                // 2. Jalankan timer
+                // Jalankan timer
                 setInterval(() => {
                     seconds++;
                     const mins = String(Math.floor(seconds / 60)).padStart(2, '0');
@@ -322,16 +323,11 @@
                     timerDisplay.textContent = `${mins}:${secs}`;
                 }, 1000);
 
-                // 3. LOCK status agar onbeforeunload TIDAK terpicu saat submit
-                // Ini triknya: kita set false dulu sebentar supaya navigasi submit dianggap aman
-                isImporting = false;
-
-                // Kasih jeda 10ms lalu kunci lagi buat jaga-jaga user tekan F5/X setelah submit jalan
-                setTimeout(() => { isImporting = true; }, 100);
+                // Kunci status import dengan jeda 500ms (Fix Edge Pop-up)
+                setTimeout(() => { isImporting = true; }, 500);
             });
         }
 
-        // EXIT GUARD: Hanya muncul jika user sengaja klik link lain atau tutup tab
         window.onbeforeunload = function() {
             if (isImporting) {
                 return "Proses sedang berjalan...";

@@ -91,25 +91,29 @@ class ItemController extends Controller
     }
 
     /**
-     * [DITIMPA] Store: Catat Aktivitas Buat Baru
+     * Store: Validasi Nama Duplikat (Item vs Item, Folder vs Folder)
      */
     public function store(Request $request)
     {
-        // ... (validasi tetap sama) ...
         $request->validate(['nama' => 'required|string|max:100', 'type' => 'required|in:item,folder']);
+
+        if ($request->type === 'folder') {
+            if (Folder::where('nama', $request->nama)->exists()) return redirect()->back()->with('error', "Folder '{$request->nama}' sudah ada.");
+        } else {
+            if (Item::where('nama', $request->nama)->exists()) return redirect()->back()->with('error', "Item '{$request->nama}' sudah ada.");
+        }
 
         DB::beginTransaction();
         try {
             if ($request->type === 'folder') {
                 $folder = Folder::create(['nama' => $request->nama, 'parent_id' => $request->folder_id]);
                 $folder->updatePath();
-                $this->logActivity(null, 0, "Dibuat Folder baru: '{$folder->nama}' di " . ($folder->parent ? $folder->parent->nama : 'Root'));
+                $this->logActivity(null, 0, "Dibuat Folder baru: '{$folder->nama}'");
             } else {
-                // Logika item... (saveSingleItem di bawah menghandle log)
                 if (empty(json_decode($request->variant_dimensions, true))) {
-                    $this->saveSingleItem($request, $request->nama, $request->folder_id, null);
+                    $this->saveSingleItem($request, $request->nama, $request->folder_id, $request->materials_data);
                 } else {
-                    $this->generateVariantsWithMaterials($request, json_decode($request->variant_dimensions, true), $request->folder_id, null);
+                    $this->generateVariantsWithMaterials($request, json_decode($request->variant_dimensions, true), $request->folder_id, $request->materials_data);
                 }
             }
             DB::commit();
@@ -133,15 +137,20 @@ class ItemController extends Controller
     }
 
     /**
-     * [DITIMPA] Update: Catat Perubahan Data
+     * Update Item: Validasi Nama Duplikat
      */
     public function update(Request $request, Item $item)
     {
+        if (Item::where('nama', $request->nama)->where('id', '!=', $item->id)->exists()) {
+            return redirect()->back()->with('error', "Nama '{$request->nama}' sudah digunakan item lain.");
+        }
         $oldName = $item->nama;
         $item->update($request->all());
-        $this->logActivity($item->id, 0, "Update data item: '{$oldName}' -> '{$item->nama}'");
+        $this->logActivity($item->id, 0, "Update: '{$oldName}' -> '{$item->nama}'");
         return redirect()->route('item.show', $item->id)->with('success', 'Data diperbarui.');
     }
+
+
 
     /**
      * [BARU] Ajax Search untuk BOM agar Create Page tidak HTTP 500
@@ -158,40 +167,134 @@ class ItemController extends Controller
     }
 
     /**
-     * [DITIMPA] Import CSV: Log Detail File & Folder
+     * [DITIMPA] MEGA OPTIMIZED IMPORT: Validasi SQL (Fail-Fast) dengan Timer di Error & Update items_count
      */
     public function importCsv(Request $request)
     {
-        ini_set('max_execution_time', 1200);
+        ini_set('max_execution_time', 1800);
         ini_set('memory_limit', '2048M');
-        $startTime = microtime(true);
+        $startTime = microtime(true); // Mulai Timer
 
         $request->validate(['file_csv' => 'required|mimes:csv,txt']);
         $filePath = $request->file('file_csv')->getRealPath();
         $originalFilename = $request->file('file_csv')->getClientOriginalName();
+        $filenameOnly = pathinfo($originalFilename, PATHINFO_FILENAME);
 
-        // Siapkan staging di luar try agar variable tersedia
+        // 1. Tentukan Nama Folder (Windows Style)
+        $folderName = $filenameOnly;
+        $counter = 1;
+        while (Folder::where('nama', $folderName)->exists()) {
+            $counter++;
+            $folderName = "{$filenameOnly}({$counter})";
+        }
+
         $staging = 'temp_imp_' . Str::random(5);
-        DB::statement("SET SESSION unique_checks=0;");
-        DB::statement("SET SESSION foreign_key_checks=0;");
-
-        DB::statement("CREATE TEMPORARY TABLE $staging (
-            nomor INT, nama VARCHAR(255) COLLATE utf8mb4_unicode_ci, satuan VARCHAR(50) COLLATE utf8mb4_unicode_ci,
-            stok_saat_ini VARCHAR(50), stok_minimum VARCHAR(50), harga_jual VARCHAR(50), harga_beli VARCHAR(50),
-            note TEXT COLLATE utf8mb4_unicode_ci, materials TEXT COLLATE utf8mb4_unicode_ci, tags TEXT COLLATE utf8mb4_unicode_ci
-        )");
-
         $pathForSql = str_replace('\\', '/', $filePath);
-        DB::connection()->getpdo()->exec("LOAD DATA LOCAL INFILE '$pathForSql' INTO TABLE $staging FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"' LINES TERMINATED BY '\\r\\n' IGNORE 1 LINES");
-        DB::statement("ALTER TABLE $staging ADD INDEX(nama), ADD INDEX(nomor)");
 
+        // 2. Load Data ke Staging (Engine InnoDB dengan Index On-the-fly)
+        DB::statement("CREATE TEMPORARY TABLE $staging (
+            nomor INT PRIMARY KEY,
+            nama VARCHAR(255) COLLATE utf8mb4_unicode_ci,
+            satuan VARCHAR(50),
+            stok_saat_ini VARCHAR(50),
+            stok_minimum VARCHAR(50),
+            harga_jual VARCHAR(50),
+            harga_beli VARCHAR(50),
+            note TEXT,
+            materials TEXT,
+            tags TEXT,
+            INDEX idx_nama (nama)
+        ) ENGINE=InnoDB");
+
+        DB::connection()->getpdo()->exec("LOAD DATA LOCAL INFILE '$pathForSql' INTO TABLE $staging FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"' LINES TERMINATED BY '\\r\\n' IGNORE 1 LINES");
+
+        // --- VALIDASI SUPER CEPAT ---
+
+        // A. Cek Nama Duplikat (CSV vs CSV)
+        $dupNameCsv = DB::table($staging)->select('nama')->groupBy('nama')->havingRaw('COUNT(*) > 1')->value('nama');
+        if ($dupNameCsv) {
+            $elapsed = round(microtime(true) - $startTime, 2);
+            return redirect()->back()->with('error', "Import Batal: Nama '$dupNameCsv' duplikat di dalam file CSV. [Pengecekan: {$elapsed} detik]");
+        }
+
+        // B. Cek Nama Duplikat (CSV vs Database)
+        $existsInDb = DB::table($staging)
+            ->join('items', "$staging.nama", '=', 'items.nama')
+            ->whereNull('items.deleted_at')
+            ->select("$staging.nama")
+            ->first();
+        if ($existsInDb) {
+            $elapsed = round(microtime(true) - $startTime, 2);
+            return redirect()->back()->with('error', "Import Batal: Nama '{$existsInDb->nama}' sudah ada di database. [Pengecekan: {$elapsed} detik]");
+        }
+
+        // C. Validasi BOM Rule (Recursive CTE)
+        $mapTable = 'temp_bom_check_' . Str::random(5);
+        DB::statement("CREATE TEMPORARY TABLE $mapTable (parent INT, child INT, INDEX (parent, child)) ENGINE=InnoDB");
+
+        DB::statement("INSERT INTO $mapTable (parent, child)
+            WITH RECURSIVE split_m AS (
+                SELECT nomor as p, SUBSTRING_INDEX(materials, ',', 1) as part,
+                       IF(LOCATE(',', materials) > 0, SUBSTRING(materials, LOCATE(',', materials) + 1), NULL) as rest
+                FROM $staging WHERE materials IS NOT NULL AND materials <> ''
+                UNION ALL
+                SELECT p, SUBSTRING_INDEX(rest, ',', 1),
+                       IF(LOCATE(',', rest) > 0, SUBSTRING(rest, LOCATE(',', rest) + 1), NULL)
+                FROM split_m WHERE rest IS NOT NULL
+            )
+            SELECT DISTINCT p, CAST(SUBSTRING_INDEX(TRIM(part), '(', 1) AS UNSIGNED) FROM split_m");
+
+        // C1. Rule: Self-referencing
+        $selfBom = DB::table($mapTable)->whereRaw("parent = child")->first();
+        if ($selfBom) {
+            $elapsed = round(microtime(true) - $startTime, 2);
+            return redirect()->back()->with('error', "Import Batal: Item nomor {$selfBom->parent} mereferensikan dirinya sendiri sebagai material. [Pengecekan: {$elapsed} detik]");
+        }
+
+        // C2. Rule: Material tidak boleh merupakan BOM
+        $bomAsMaterial = DB::table($mapTable)
+            ->join($staging, "$mapTable.child", '=', "$staging.nomor")
+            ->whereRaw("$staging.materials IS NOT NULL AND $staging.materials <> ''")
+            ->select("$mapTable.parent", "$mapTable.child")
+            ->first();
+        if ($bomAsMaterial) {
+            $elapsed = round(microtime(true) - $startTime, 2);
+            return redirect()->back()->with('error', "Import Batal: Item #{$bomAsMaterial->parent} mengandung material #{$bomAsMaterial->child} yang juga merupakan BOM. [Pengecekan: {$elapsed} detik]");
+        }
+
+        // C3. Rule: Material berulang (Validasi duplikat material asli)
+        $dupMat = DB::select("
+            SELECT parent, child FROM (
+                SELECT p as parent, CAST(SUBSTRING_INDEX(TRIM(SUBSTRING_INDEX(rest_full, ',', n)), ',', -1) AS UNSIGNED) as child
+                FROM (
+                    SELECT nomor as p, materials as rest_full,
+                    LENGTH(materials) - LENGTH(REPLACE(materials, ',', '')) + 1 as total_parts
+                    FROM $staging WHERE materials IS NOT NULL AND materials <> ''
+                ) as base
+                JOIN (
+                    SELECT a.N + b.N * 10 + 1 as n
+                    FROM (SELECT 0 as N UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) a
+                    CROSS JOIN (SELECT 0 as N UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) b
+                ) as numbers ON n <= total_parts
+            ) as sub
+            GROUP BY parent, child HAVING COUNT(*) > 1 LIMIT 1
+        ");
+        if (!empty($dupMat)) {
+            $elapsed = round(microtime(true) - $startTime, 2);
+            return redirect()->back()->with('error', "Import Batal: Item #{$dupMat[0]->parent} memiliki material yang dimasukkan berulang kali (#{$dupMat[0]->child}). [Pengecekan: {$elapsed} detik]");
+        }
+
+        // --- PROSES INSERT MASSAL ---
         DB::beginTransaction();
         try {
-            $folderName = pathinfo($originalFilename, PATHINFO_FILENAME);
             $folder = Folder::create(['nama' => $folderName, 'parent_id' => $request->folder_id]);
             $folder->updatePath();
 
             $now = now();
+            // Speed Hack: Matikan unique check (kita sudah validasi manual di atas)
+            DB::statement("SET SESSION unique_checks=0");
+            DB::statement("SET SESSION foreign_key_checks=0");
+
             DB::statement("INSERT INTO items (nama, sku, satuan, stok_saat_ini, stok_minimum, harga_jual, harga_beli, note, folder_id, created_at, updated_at)
                 SELECT TRIM(nama), CONCAT('SKU-', nomor, '-', UNIX_TIMESTAMP()), satuan,
                 CASE WHEN (materials IS NOT NULL AND materials <> '') THEN 0 ELSE stok_saat_ini END,
@@ -200,20 +303,20 @@ class ItemController extends Controller
 
             $this->finalizeImportBomOneShot($staging, $folder->id);
 
+            // Update items_count pada folder
             $total = DB::table($staging)->count();
-            DB::table('folders')->where('id', $folder->id)->update(['items_count' => $total]);
-
-            // [LOG BARU]
-            $this->logActivity(null, $total, "IMPORT SELESAI: File '{$originalFilename}' ({$total} baris) masuk ke folder '{$folderName}'");
+            $folder->update(['items_count' => $total]);
 
             DB::commit();
-            return redirect()->back()->with('success', 'Import Berhasil.');
+
+            DB::statement("SET SESSION unique_checks=1");
+            DB::statement("SET SESSION foreign_key_checks=1");
+
+            $elapsed = round(microtime(true) - $startTime, 2);
+            return redirect()->back()->with('success', "Import $total data Berhasil ke folder '$folderName' dalam waktu $elapsed detik.");
         } catch (\Exception $e) {
             DB::rollBack();
-            return redirect()->back()->with('error', $e->getMessage());
-        } finally {
-            DB::statement("SET SESSION unique_checks=1;");
-            DB::statement("SET SESSION foreign_key_checks=1;");
+            return redirect()->back()->with('error', "Gagal saat memproses data: " . $e->getMessage());
         }
     }
 
@@ -241,6 +344,7 @@ class ItemController extends Controller
      */
     private function finalizeImportBomOneShot($staging, $folderId)
     {
+        // Ambil mapping Nama ke ID yang baru saja diinsert
         $mapping = DB::table('items')
             ->join($staging, 'items.nama', '=', "$staging.nama")
             ->where('items.folder_id', $folderId)
@@ -253,6 +357,9 @@ class ItemController extends Controller
 
         if ($bomRows->isEmpty()) return;
 
+        // Identifikasi mana saja item yang merupakan BOM (untuk validasi rule: material tidak boleh nomor item BOM)
+        $bomNomors = $bomRows->pluck('nomor')->toArray();
+
         $mapTable = 'temp_bom_map_' . Str::random(5);
         DB::statement("CREATE TEMPORARY TABLE $mapTable (item_id INT PRIMARY KEY, final_json JSON)");
 
@@ -261,17 +368,28 @@ class ItemController extends Controller
             $mParts = array_map('trim', explode(',', $row->materials));
             $finalM = [];
             foreach ($mParts as $p) {
+                // Regex untuk handle nomor(qty) atau nomor saja
                 preg_match('/^(\d+)(?:\(([\d.]+)\))?$/', $p, $matches);
                 if ($matches) {
-                    $mNum = $matches[1];
+                    $mNum = (int)$matches[1];
                     $mQty = isset($matches[2]) ? (float)$matches[2] : 1.0;
-                    if (isset($mapping[$mNum])) $finalM[] = ['item_id' => $mapping[$mNum], 'qty' => $mQty];
+
+                    // VALIDASI: Material tidak boleh merujuk ke item yang juga BOM di file ini
+                    if (in_array($mNum, $bomNomors)) {
+                        throw new \Exception("Aturan BOM Dilanggar: Item nomor {$row->nomor} menggunakan material nomor $mNum yang merupakan sesama BOM.");
+                    }
+
+                    if (isset($mapping[$mNum])) {
+                        $finalM[] = ['item_id' => $mapping[$mNum], 'qty' => $mQty];
+                    }
                 }
             }
+
             if ($finalM && isset($mapping[$row->nomor])) {
                 $batch[] = ['item_id' => $mapping[$row->nomor], 'final_json' => json_encode($finalM)];
             }
-            if (count($batch) >= 3000) {
+
+            if (count($batch) >= 2000) {
                 DB::table($mapTable)->insert($batch);
                 $batch = [];
             }
@@ -438,11 +556,16 @@ class ItemController extends Controller
         return redirect()->back();
     }
 
+    /**
+     * Update Folder: Validasi Nama Duplikat
+     */
     public function updateFolder(Request $request, Folder $folder) {
+        if (Folder::where('nama', $request->nama)->where('id', '!=', $folder->id)->exists()) {
+            return redirect()->back()->with('error', "Nama folder '{$request->nama}' sudah ada.");
+        }
         $folder->update(['nama' => $request->nama]);
         return redirect()->back();
     }
-
     public function destroy(Item $item) { $item->delete(); return redirect()->route('item.index'); }
 
     /**
