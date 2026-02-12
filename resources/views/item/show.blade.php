@@ -141,7 +141,7 @@
         <!-- KOLOM KANAN: STATISTIK, BOM & LOG -->
         <div class="col-lg-8">
             <!-- Ringkasan Pergerakan -->
-            <div class="row mb-4">
+            {{-- <div class="row mb-4">
                 <div class="col-md-6">
                     <div class="card border-0 shadow-sm bg-success text-white p-3">
                         <div class="d-flex justify-content-between align-items-center">
@@ -164,7 +164,7 @@
                         </div>
                     </div>
                 </div>
-            </div>
+            </div> --}}
 
             <!-- Bagian BOM (Jika Ada) -->
             @if($item->is_bom)

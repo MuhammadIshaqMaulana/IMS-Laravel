@@ -30,8 +30,12 @@ class Item extends Model
 
     // --- ACCESSORS ---
 
+    /**
+     * [DITIMPA] Cek apakah item adalah BOM.
+     * Menggunakan count() karena jika materials berisi [] (array kosong), dia bukan BOM.
+     */
     public function getIsBomAttribute(): bool {
-        return !empty($this->materials);
+        return is_array($this->materials) && count($this->materials) > 0;
     }
 
     public function getCalculatedStockAttribute(): float {

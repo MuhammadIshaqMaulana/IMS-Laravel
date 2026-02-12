@@ -42,11 +42,10 @@
     <div class="col-md-3 mb-4">
         <div class="card bg-secondary text-white shadow-sm">
             <div class="card-body">
-                <i class="fas fa-folder fa-2x float-end"></i>
-                <h5 class="card-title">BOM/Kit Total</h5>
-                <!-- DIUBAH: Menampilkan total BOM/Kit -->
-                <p class="card-text h3">{{ $totalFolders }}</p>
-                <small>(Dianggap sebagai Item yang memiliki Material)</small>
+                <i class="fas fa-layer-group fa-2x float-end"></i>
+                <h5 class="card-title">Total Produk BOM</h5>
+                <p class="card-text h3">{{ $totalBoms }}</p>
+                <small>(Produk yang memiliki bahan baku)</small>
             </div>
         </div>
     </div>
@@ -83,23 +82,29 @@
     <div class="col-md-6 mb-4">
         <div class="card shadow h-100">
             <div class="card-header bg-dark text-white">
-                <i class="fas fa-history me-2"></i> Aktivitas Terbaru (Produksi/Perakitan)
+                <i class="fas fa-history me-2"></i> Aktivitas Terbaru
             </div>
             <div class="card-body">
                 <ul class="list-group list-group-flush">
                     @forelse ($recentActivity as $activity)
                     <li class="list-group-item">
-                        <small class="text-muted">{{ $activity->created_at->diffForHumans() }}</small><br>
-                        @if($activity->item_id)
-                            <strong>{{ $activity->catatan }}</strong> pada item <span class="text-primary">{{ $activity->itemProduksi->nama ?? 'Item' }}</span>
-                        @else
-                            <i class="fas fa-info-circle text-info me-1"></i> {{ $activity->catatan }}
-                        @endif
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="small">
+                                <!-- Gunakan double kurung kurawal dengan tanda seru agar HTML terbaca -->
+                                {!! $activity->parsed_catatan !!}
+                            </div>
+                            <small class="text-muted text-nowrap ms-2" style="font-size: 0.7rem;">
+                                {{ $activity->created_at->diffForHumans() }}
+                            </small>
+                        </div>
                     </li>
                     @empty
                         <div class="alert alert-info text-center">Belum ada aktivitas.</div>
                     @endforelse
                 </ul>
+                @if(!$recentActivity->isEmpty())
+                    <a href="{{ route('transaksi.index') }}" class="btn btn-sm btn-outline-dark w-100 mt-3">Lihat Semua Riwayat</a>
+                @endif
             </div>
         </div>
     </div>

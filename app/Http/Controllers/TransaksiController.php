@@ -7,16 +7,36 @@ use App\Models\Transaksi;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
+
 class TransaksiController extends Controller
 {
     /**
-     * Menampilkan daftar semua transaksi produksi yang pernah dilakukan.
+     * [DITIMPA] Menampilkan daftar transaksi dengan Sortly Style sorting
      */
-    public function index()
+    public function index(Request $request)
     {
-        $transaksis = Transaksi::with('itemProduksi')
-                            ->orderBy('tanggal_produksi', 'desc')
-                            ->paginate(15);
+        $sortField = $request->query('sort', 'tanggal');
+        $sortOrder = $request->query('order', 'desc');
+
+        $validSorts = [
+            'tanggal'     => 'created_at',
+            'tipe'        => 'catatan', // Sort by string content
+            'aksi'        => 'catatan',
+            'user'        => 'catatan',
+            'sku'         => 'item_id',
+            'objek'       => 'item_id',
+            'target'      => 'catatan',
+            'perubahan'   => 'catatan',
+            'asal'        => 'folder_id',
+            'tujuan'      => 'catatan',
+        ];
+
+        $dbSortField = $validSorts[$sortField] ?? 'created_at';
+
+        $transaksis = Transaksi::with(['itemProduksi.folder'])
+            ->orderBy($dbSortField, $sortOrder)
+            ->paginate(25)
+            ->appends($request->query());
 
         return view('transaksi.index', compact('transaksis'));
     }

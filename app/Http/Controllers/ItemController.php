@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Illuminate\Support\Facades\Auth; // Tambahkan ini
 
 
 class ItemController extends Controller
@@ -91,7 +92,7 @@ class ItemController extends Controller
     }
 
     /**
-     * Store: Validasi Nama Duplikat (Item vs Item, Folder vs Folder)
+     * [DITIMPA] Store: Mengolah materials_data menjadi array asli atau NULL
      */
     public function store(Request $request)
     {
@@ -110,10 +111,15 @@ class ItemController extends Controller
                 $folder->updatePath();
                 $this->logActivity(null, 0, "Dibuat Folder baru: '{$folder->nama}'");
             } else {
+                // Konversi string JSON dari input ke array PHP
+                $decodedMaterials = json_decode($request->materials_data, true);
+                // Jika array kosong atau bukan array, jadikan NULL
+                $finalMaterials = (!empty($decodedMaterials)) ? $decodedMaterials : null;
+
                 if (empty(json_decode($request->variant_dimensions, true))) {
-                    $this->saveSingleItem($request, $request->nama, $request->folder_id, $request->materials_data);
+                    $this->saveSingleItem($request, $request->nama, $request->folder_id, $finalMaterials);
                 } else {
-                    $this->generateVariantsWithMaterials($request, json_decode($request->variant_dimensions, true), $request->folder_id, $request->materials_data);
+                    $this->generateVariantsWithMaterials($request, json_decode($request->variant_dimensions, true), $request->folder_id, $finalMaterials);
                 }
             }
             DB::commit();
@@ -122,12 +128,12 @@ class ItemController extends Controller
     }
 
     public function show(Item $item) {
-        $history = $item->transaksis()->orderBy('tanggal_produksi', 'desc')->get();
-        $stats = [
-            'total_in' => $item->transaksis()->where('jumlah_produksi', '>', 0)->sum('jumlah_produksi'),
-            'total_out' => abs($item->transaksis()->where('jumlah_produksi', '<', 0)->sum('jumlah_produksi')),
-        ];
-        return view('item.show', compact('item', 'history', 'stats'));
+        $history = $item->transaksis()->orderBy('created_at', 'desc')->get();
+        // $stats = [
+        //     'total_in' => $item->transaksis()->where('jumlah_produksi', '>', 0)->sum('jumlah_produksi'),
+        //     'total_out' => abs($item->transaksis()->where('jumlah_produksi', '<', 0)->sum('jumlah_produksi')),
+        // ];
+        return view('item.show', compact('item', 'history'));
     }
 
     public function edit(Item $item) {
@@ -137,15 +143,24 @@ class ItemController extends Controller
     }
 
     /**
-     * Update Item: Validasi Nama Duplikat
+     * [DITIMPA] Update: Tambahkan logika pembersihan material agar tidak jadi []
      */
     public function update(Request $request, Item $item)
     {
         if (Item::where('nama', $request->nama)->where('id', '!=', $item->id)->exists()) {
             return redirect()->back()->with('error', "Nama '{$request->nama}' sudah digunakan item lain.");
         }
+
         $oldName = $item->nama;
-        $item->update($request->all());
+        $data = $request->all();
+
+        // Bersihkan material_data jika dikirim lewat form edit
+        if ($request->has('materials_data')) {
+            $mats = json_decode($request->materials_data, true);
+            $data['materials'] = (!empty($mats)) ? $mats : null;
+        }
+
+        $item->update($data);
         $this->logActivity($item->id, 0, "Update: '{$oldName}' -> '{$item->nama}'");
         return redirect()->route('item.show', $item->id)->with('success', 'Data diperbarui.');
     }
@@ -167,20 +182,19 @@ class ItemController extends Controller
     }
 
     /**
-     * [DITIMPA] MEGA OPTIMIZED IMPORT: Validasi SQL (Fail-Fast) dengan Timer di Error & Update items_count
+     * MEGA OPTIMIZED IMPORT: Validasi SQL (Fail-Fast) & Update items_count
      */
     public function importCsv(Request $request)
     {
         ini_set('max_execution_time', 1800);
         ini_set('memory_limit', '2048M');
-        $startTime = microtime(true); // Mulai Timer
+        $startTime = microtime(true);
 
         $request->validate(['file_csv' => 'required|mimes:csv,txt']);
         $filePath = $request->file('file_csv')->getRealPath();
         $originalFilename = $request->file('file_csv')->getClientOriginalName();
         $filenameOnly = pathinfo($originalFilename, PATHINFO_FILENAME);
 
-        // 1. Tentukan Nama Folder (Windows Style)
         $folderName = $filenameOnly;
         $counter = 1;
         while (Folder::where('nama', $folderName)->exists()) {
@@ -191,7 +205,6 @@ class ItemController extends Controller
         $staging = 'temp_imp_' . Str::random(5);
         $pathForSql = str_replace('\\', '/', $filePath);
 
-        // 2. Load Data ke Staging (Engine InnoDB dengan Index On-the-fly)
         DB::statement("CREATE TEMPORARY TABLE $staging (
             nomor INT PRIMARY KEY,
             nama VARCHAR(255) COLLATE utf8mb4_unicode_ci,
@@ -206,9 +219,13 @@ class ItemController extends Controller
             INDEX idx_nama (nama)
         ) ENGINE=InnoDB");
 
-        DB::connection()->getpdo()->exec("LOAD DATA LOCAL INFILE '$pathForSql' INTO TABLE $staging FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"' LINES TERMINATED BY '\\r\\n' IGNORE 1 LINES");
+        try {
+            DB::connection()->getpdo()->exec("LOAD DATA LOCAL INFILE '$pathForSql' INTO TABLE $staging FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"' LINES TERMINATED BY '\\r\\n' IGNORE 1 LINES");
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', "Format CSV salah: " . $e->getMessage());
+        }
 
-        // --- VALIDASI SUPER CEPAT ---
+        // --- VALIDASI SUPER CEPAT (Fail-Fast) ---
 
         // A. Cek Nama Duplikat (CSV vs CSV)
         $dupNameCsv = DB::table($staging)->select('nama')->groupBy('nama')->havingRaw('COUNT(*) > 1')->value('nama');
@@ -242,7 +259,7 @@ class ItemController extends Controller
                        IF(LOCATE(',', rest) > 0, SUBSTRING(rest, LOCATE(',', rest) + 1), NULL)
                 FROM split_m WHERE rest IS NOT NULL
             )
-            SELECT DISTINCT p, CAST(SUBSTRING_INDEX(TRIM(part), '(', 1) AS UNSIGNED) FROM split_m");
+            SELECT DISTINCT p, CAST(SUBSTRING_INDEX(TRIM(SUBSTRING_INDEX(part, '(', 1)), '(', 1) AS UNSIGNED) FROM split_m");
 
         // C1. Rule: Self-referencing
         $selfBom = DB::table($mapTable)->whereRaw("parent = child")->first();
@@ -251,7 +268,7 @@ class ItemController extends Controller
             return redirect()->back()->with('error', "Import Batal: Item nomor {$selfBom->parent} mereferensikan dirinya sendiri sebagai material. [Pengecekan: {$elapsed} detik]");
         }
 
-        // C2. Rule: Material tidak boleh merupakan BOM
+        // C2. Rule: Material tidak boleh merupakan BOM (di file yang sama)
         $bomAsMaterial = DB::table($mapTable)
             ->join($staging, "$mapTable.child", '=', "$staging.nomor")
             ->whereRaw("$staging.materials IS NOT NULL AND $staging.materials <> ''")
@@ -262,26 +279,28 @@ class ItemController extends Controller
             return redirect()->back()->with('error', "Import Batal: Item #{$bomAsMaterial->parent} mengandung material #{$bomAsMaterial->child} yang juga merupakan BOM. [Pengecekan: {$elapsed} detik]");
         }
 
-        // C3. Rule: Material berulang (Validasi duplikat material asli)
+        // C3. Rule: Material berulang (Validasi duplikat material asli - Fixed Version)
         $dupMat = DB::select("
             SELECT parent, child FROM (
-                SELECT p as parent, CAST(SUBSTRING_INDEX(TRIM(SUBSTRING_INDEX(rest_full, ',', n)), ',', -1) AS UNSIGNED) as child
-                FROM (
-                    SELECT nomor as p, materials as rest_full,
-                    LENGTH(materials) - LENGTH(REPLACE(materials, ',', '')) + 1 as total_parts
-                    FROM $staging WHERE materials IS NOT NULL AND materials <> ''
-                ) as base
-                JOIN (
+                SELECT nomor as parent,
+                       CAST(SUBSTRING_INDEX(TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(materials, ',', n), ',', -1)), '(', 1) AS UNSIGNED) as child
+                FROM $staging
+                CROSS JOIN (
                     SELECT a.N + b.N * 10 + 1 as n
                     FROM (SELECT 0 as N UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) a
                     CROSS JOIN (SELECT 0 as N UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9) b
-                ) as numbers ON n <= total_parts
-            ) as sub
-            GROUP BY parent, child HAVING COUNT(*) > 1 LIMIT 1
+                ) numbers
+                WHERE materials IS NOT NULL
+                  AND materials <> ''
+                  AND n <= (LENGTH(materials) - LENGTH(REPLACE(materials, ',', '')) + 1)
+            ) AS sub
+            GROUP BY parent, child
+            HAVING COUNT(*) > 1
+            LIMIT 1
         ");
         if (!empty($dupMat)) {
             $elapsed = round(microtime(true) - $startTime, 2);
-            return redirect()->back()->with('error', "Import Batal: Item #{$dupMat[0]->parent} memiliki material yang dimasukkan berulang kali (#{$dupMat[0]->child}). [Pengecekan: {$elapsed} detik]");
+            return redirect()->back()->with('error', "Import Batal: Item #{$dupMat[0]->parent} memiliki material #{$dupMat[0]->child} yang dimasukkan berulang kali. [Pengecekan: {$elapsed} detik]");
         }
 
         // --- PROSES INSERT MASSAL ---
@@ -291,52 +310,88 @@ class ItemController extends Controller
             $folder->updatePath();
 
             $now = now();
-            // Speed Hack: Matikan unique check (kita sudah validasi manual di atas)
             DB::statement("SET SESSION unique_checks=0");
             DB::statement("SET SESSION foreign_key_checks=0");
 
             DB::statement("INSERT INTO items (nama, sku, satuan, stok_saat_ini, stok_minimum, harga_jual, harga_beli, note, folder_id, created_at, updated_at)
                 SELECT TRIM(nama), CONCAT('SKU-', nomor, '-', UNIX_TIMESTAMP()), satuan,
-                CASE WHEN (materials IS NOT NULL AND materials <> '') THEN 0 ELSE stok_saat_ini END,
-                stok_minimum, harga_jual, harga_beli, note, {$folder->id}, '$now', '$now'
+                CASE WHEN (materials IS NOT NULL AND materials <> '') THEN 0 ELSE IFNULL(stok_saat_ini, 0) END,
+                IFNULL(stok_minimum, 0), IFNULL(harga_jual, 0), IFNULL(harga_beli, 0), note, {$folder->id}, '$now', '$now'
                 FROM $staging WHERE nama <> ''");
 
             $this->finalizeImportBomOneShot($staging, $folder->id);
 
-            // Update items_count pada folder
-            $total = DB::table($staging)->count();
-            $folder->update(['items_count' => $total]);
+            // FIX: Update items_count secara manual (Raw SQL tidak memicu observer)
+            $totalIn = DB::table($staging)->where('nama', '<>', '')->count();
+            $folder->update(['items_count' => $totalIn]);
 
             DB::commit();
+
+            // LOG: Pakai Auth::id() agar tidak error
+            $userId = Auth::id();
+            $msg = "({$userId}) mengimport {$totalIn} data baru ke folder [{$folder->id}]";
+            $this->logActivity(null, $folder->id, $msg);
 
             DB::statement("SET SESSION unique_checks=1");
             DB::statement("SET SESSION foreign_key_checks=1");
 
-            $elapsed = round(microtime(true) - $startTime, 2);
-            return redirect()->back()->with('success', "Import $total data Berhasil ke folder '$folderName' dalam waktu $elapsed detik.");
+            return redirect()->back()->with('success', "Import $totalIn data Berhasil ke folder '$folderName'");
         } catch (\Exception $e) {
             DB::rollBack();
-            return redirect()->back()->with('error', "Gagal saat memproses data: " . $e->getMessage());
+            Log::error("Import Error: " . $e->getMessage());
+            return redirect()->back()->with('error', "Gagal: " . $e->getMessage());
+        } finally {
+            DB::statement("DROP TEMPORARY TABLE IF EXISTS $staging");
         }
     }
 
     /**
-     * [DITIMPA] Move: Catat Perpindahan Lokasi
+     * [DITIMPA] Move Item/Folder: Logic update folder_id dan counter items_count
      */
     public function move(Request $request) {
         $target = ($request->target_type === 'item') ? Item::findOrFail($request->id) : Folder::findOrFail($request->id);
-        $oldLoc = $target->folder ? $target->folder->nama : 'Root';
-        $newLoc = $request->folder_id ? Folder::find($request->folder_id)->nama : 'Root';
+        $oldFolderId = $target->folder_id;
+        $newFolderId = $request->folder_id ?: null; // null berarti Root
+        $userId = Auth::id();
+
+        if ($oldFolderId == $newFolderId) return redirect()->back()->with('info', 'Lokasi sama.');
 
         DB::beginTransaction();
         try {
-            // (Logika update folder_id dan counter tetap sama seperti chat sebelumnya)
-            // ... (asumsi kode move sudah loe punya di controller)
+            if ($request->target_type === 'item') {
+                // 1. Update folder_id di tabel items
+                $target->update(['folder_id' => $newFolderId]);
 
-            $this->logActivity($request->target_type === 'item' ? $target->id : null, 0, "PINDAH: {$request->target_type} '{$target->nama}' dari [{$oldLoc}] ke [{$newLoc}]");
+                // 2. Kurangi count di folder lama
+                if ($oldFolderId) {
+                    Folder::where('id', $oldFolderId)->decrement('items_count');
+                }
+                // 3. Tambah count di folder baru
+                if ($newFolderId) {
+                    Folder::where('id', $newFolderId)->increment('items_count');
+                }
+
+                // Log: (id_user) memindahkan (id_item) dari [id_folder] ke [id_folder]
+                $msg = "({$userId}) memindahkan ({$target->id}) dari [" . ($oldFolderId ?: 0) . "] ke [" . ($newFolderId ?: 0) . "]";
+                $this->logActivity($target->id, $oldFolderId, $msg);
+
+            } else {
+                // Logic untuk Folder
+                $target->update(['parent_id' => $newFolderId]);
+                $target->updatePath();
+                $this->syncDescendantPaths($target);
+
+                // Log Folder Move
+                $msg = "({$userId}) memindahkan folder ({$target->nama}) ke [" . ($newFolderId ?: 0) . "]";
+                $this->logActivity(null, $oldFolderId, $msg);
+            }
+
             DB::commit();
             return redirect()->back()->with('success', 'Berhasil dipindahkan.');
-        } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', 'Gagal.'); }
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()->with('error', 'Gagal pindah: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -463,13 +518,31 @@ class ItemController extends Controller
         return redirect()->back()->with('success', 'Data dikloning.');
     }
 
+    /**
+     * [DITIMPA] Bulk Update Quantity: Format catatan sesuai request
+     */
     public function bulkUpdateQuantity(Request $request) {
         $itemIds = json_decode($request->selected_items, true);
+        $count = count($itemIds);
         $change = (float) $request->qty_adjustment;
+        $prefix = $change >= 0 ? "+$change" : "$change";
+        $userId = Auth::id();
+
+        // Ambil folder_id dari item pertama untuk log (opsional)
+        $firstItem = Item::find($itemIds[0]);
+        $folderId = $firstItem ? $firstItem->folder_id : 0;
+
         foreach (Item::whereIn('id', $itemIds)->get() as $item) {
-            if (!$item->is_bom) { $item->increment('stok_saat_ini', $change); $this->logActivity($item->id, $change, 'Penyesuaian massal'); }
+            if (!$item->is_bom) {
+                $item->increment('stok_saat_ini', $change);
+            }
         }
-        return redirect()->back()->with('success', 'Stok diperbarui.');
+
+        // LOG: (id_user) update stok (jumlah) item menjadi (prefix) di folder [id_folder]
+        $msg = "({$userId}) update stok {$count} item menjadi '{$prefix}' di folder [" . ($folderId ?: 0) . "]";
+        $this->logActivity(null, $folderId, $msg);
+
+        return redirect()->back()->with('success', 'Stok massal berhasil diperbarui.');
     }
 
     public function bulkUpdate(Request $request) {
@@ -493,16 +566,30 @@ class ItemController extends Controller
 
     // --- HELPERS ---
 
+    /**
+     * [DITIMPA] Helper Save Single: Menerima $materials yang sudah jadi array/null
+     */
     private function saveSingleItem($request, $name, $folderId, $materials) {
         $item = Item::create([
-            'nama' => $name, 'sku' => ($materials) ? 'BOM-' . strtoupper(Str::random(6)) : $this->generateUniqueSku($name),
-            'satuan' => $request->satuan, 'stok_saat_ini' => ($materials) ? 0 : ($request->stok_saat_ini ?? 0),
-            'stok_minimum' => $request->stok_minimum ?? 0, 'harga_jual' => $request->harga_jual ?? 0, 'harga_beli' => $request->harga_beli ?? 0,
-            'folder_id' => $folderId, 'materials' => $materials, 'note' => $request->note, 'tags' => array_filter(array_map('trim', explode(',', $request->tags_input ?? ''))) ?: null,
+            'nama' => $name,
+            'sku' => ($materials) ? 'BOM-' . strtoupper(Str::random(6)) : $this->generateUniqueSku($name),
+            'satuan' => $request->satuan,
+            'stok_saat_ini' => ($materials) ? 0 : ($request->stok_saat_ini ?? 0),
+            'stok_minimum' => $request->stok_minimum ?? 0,
+            'harga_jual' => $request->harga_jual ?? 0,
+            'harga_beli' => $request->harga_beli ?? 0,
+            'folder_id' => $folderId,
+            'materials' => $materials, // Ini sekarang murni Array atau NULL
+            'note' => $request->note,
+            'tags' => array_filter(array_map('trim', explode(',', $request->tags_input ?? ''))) ?: null,
         ]);
         if (!$materials && $item->stok_saat_ini > 0) $this->logActivity($item->id, $item->stok_saat_ini, 'Saldo awal');
     }
 
+
+    /**
+     * [DITIMPA] Helper Variants: Menerima $materials yang sudah jadi array/null
+     */
     private function generateVariantsWithMaterials($request, $dimensions, $folderId, $materials)
     {
         $combinations = $this->generateCombinations($dimensions);
@@ -517,7 +604,7 @@ class ItemController extends Controller
                 'harga_jual' => floor($request->harga_jual ?? 0),
                 'harga_beli' => floor($request->harga_beli ?? 0),
                 'folder_id' => $folderId,
-                'materials' => $materials,
+                'materials' => $materials, // Array atau NULL
                 'note' => "Varian dari " . $request->nama,
                 'tags' => array_filter(array_map('trim', explode(',', $request->tags_input ?? ''))) ?: null,
             ]);
@@ -540,20 +627,28 @@ class ItemController extends Controller
     /**
      * [BARU/DITIMPA] Helper Log: Menjamin item_id nullable
      */
-    private function logActivity($itemId, $qty, $note) {
-        Transaksi::create([
-            'item_id' => $itemId ?: null,
-            'jumlah_produksi' => (float)$qty,
-            'tanggal_produksi' => now(),
-            'catatan' => $note
+    private function logActivity($itemId, $folderId, $note) {
+        \App\Models\Transaksi::create([
+            'item_id'   => $itemId ?: null,
+            'folder_id' => $folderId ?: null,
+            'catatan'   => $note,
         ]);
     }
 
     public function updateQuantity(Request $request, Item $item) {
         $request->validate(['qty' => 'required|numeric']);
         $item->increment('stok_saat_ini', $request->qty);
-        $this->logActivity($item->id, $request->qty, 'Update cepat');
-        return redirect()->back();
+
+        $userId = Auth::id();
+        $prefix = $request->qty >= 0 ? "+{$request->qty}" : $request->qty;
+
+        // Format: (id_user) update stok (id_item) menjadi (prefix)
+        $msg = "({$userId}) update stok ({$item->id}) menjadi '{$prefix}'";
+
+        // Argumen: itemId, folderId (null), note
+        $this->logActivity($item->id, null, $msg);
+
+        return redirect()->back()->with('success', 'Stok berhasil diupdate.');
     }
 
     /**
