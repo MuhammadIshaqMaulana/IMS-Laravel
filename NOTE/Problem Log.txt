@@ -1,13 +1,11 @@
-A. gue mau kasih aturan pemberian kode:
+A. ini rule pas loe ngasih kode:
 - cukup kasih gue fungsi/section yang dibutuhkan
-
 - pastikan loe tetap memberi comment mana fungsi/section baru dan mana fungsi lama yang perlu di timpa. Tanpa itu gue bakal mencari-cari fungsi lamanya untuk ditimpa padahal itu adalah fungsi baru
-
+- kasih tahu gue juga jika ada fungsi yang harus dihapus
 - pastikan juga fungsi/section yang loe berikan itu lengkap, jangan setengah-setengah, karena gue ketika lihat fungsi/section, gue langsung copy paste tanpa lihat detail isinya.
+- pastikan juga nama fungsi/id section itu nggak loe ubah sembarangan, biar gue lebih mudah mencarinya. 
 
-- loe cukup kasih fungsi/section yang perlu ditimpa atau baru.
 
-- pastikan juga nama fungsi/id section itu nggak loe ubah sembarangan, biar gue lebih mudah mencarinya. 
 
 
 AUTHENTIKASI
@@ -117,3 +115,5 @@ di kolom catatan tabel transaksis, kita bisa mention id_item/id_folder, id_user,
 - FK item_id cukup penting untuk memperkuat relasi database, walapun bisa di mention di kolom catatanyang tidak sekuat foreign key, namun jika ada force change di item, yang di transaksi juga ikut andil karena FK. Gue juga kepikiran untuk memasukkan FK folder_id nullable, jika user pindahin data, berarti ada 2 id folder untuk lokasi awal dan tujuan, paling simpan id folder lokasi awal saja di kolom folder id
 
 - fk item id dipakai hanya untuk mencatat transaksi 1 item, jika transaksi sudah melibatkan 2 item keatas, maka fk item id = null
+
+17. VARIAN digunakan agar user bisa membuat macam-macam varian secara cepat. misal kacang, user bisa tambah varian ukuran: s(small), m, l. Lalu user bisa tambah dimensi warna: black, yellow. hasilnya, 6 item dengan atribut dan BOM yang sama yaitu kacang - s, black; kacang - s, yellow; kacang - m, black; dll

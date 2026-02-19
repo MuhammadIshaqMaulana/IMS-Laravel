@@ -82,11 +82,10 @@ class ItemController extends Controller
     }
 
     /**
-     * [FIXED] Create: Jangan load 900rb data ke dropdown!
+     * [DITIMPA] Create: Cukup load Folder
      */
     public function create()
     {
-        // Hanya ambil folder (biasanya jumlahnya sedikit)
         $allFolders = Folder::orderBy('nama')->get();
         return view('item.create', compact('allFolders'));
     }
@@ -136,14 +135,24 @@ class ItemController extends Controller
         return view('item.show', compact('item', 'history'));
     }
 
+    /**
+     * [DITIMPA] Edit: Load Folder + Mapping Nama Material untuk Select2
+     */
     public function edit(Item $item) {
-        $allMaterials = Item::whereNull('materials')->where('id', '!=', $item->id)->orderBy('nama')->get();
         $allFolders = Folder::orderBy('nama')->get();
-        return view('item.edit', compact('item', 'allMaterials', 'allFolders'));
+
+        // Ambil nama material yang sudah ada agar Select2 tidak tampil ID angka doang
+        $materialNames = [];
+        if ($item->is_bom && is_array($item->materials)) {
+            $mIds = array_column($item->materials, 'item_id');
+            $materialNames = Item::whereIn('id', $mIds)->pluck('nama', 'id')->toArray();
+        }
+
+        return view('item.edit', compact('item', 'allFolders', 'materialNames'));
     }
 
-    /**
-     * [DITIMPA] Update: Tambahkan logika pembersihan material agar tidak jadi []
+/**
+     * [DITIMPA] Update: Mengunci aturan BOM (BOM -> Item bisa, Item -> BOM dilarang)
      */
     public function update(Request $request, Item $item)
     {
@@ -152,12 +161,22 @@ class ItemController extends Controller
         }
 
         $oldName = $item->nama;
-        $data = $request->all();
+        $data = $request->except(['materials_data', 'is_bom_check']);
 
-        // Bersihkan material_data jika dikirim lewat form edit
-        if ($request->has('materials_data')) {
-            $mats = json_decode($request->materials_data, true);
-            $data['materials'] = (!empty($mats)) ? $mats : null;
+        // LOGIKA INTEGRITAS BOM
+        if ($item->is_bom) {
+            // Jika awalnya adalah BOM, kita proses material_data
+            if ($request->has('materials_data')) {
+                $mats = json_decode($request->materials_data, true);
+                // Jika user hapus semua material, dia berubah jadi Item biasa (NULL)
+                $data['materials'] = (!empty($mats)) ? $mats : null;
+
+                // Jika berubah jadi item biasa, stok saat ini mungkin perlu diisi manual lagi nanti
+                // tapi untuk sekarang kita biarkan mengikuti flow update field.
+            }
+        } else {
+            // Jika awalnya Item Biasa, JANGAN PERNAH izinkan input materials masuk
+            $data['materials'] = null;
         }
 
         $item->update($data);
@@ -168,21 +187,21 @@ class ItemController extends Controller
 
 
     /**
-     * [BARU] Ajax Search untuk BOM agar Create Page tidak HTTP 500
+     * [DITIMPA] searchAjax: Filter item yang murni BUKAN BOM untuk jadi bahan baku
      */
-    public function searchAjax(Request $request)
-    {
-        $search = $request->q;
-        $items = Item::whereNull('materials') // Material gak boleh BOM lagi
-            ->where('nama', 'LIKE', "%$search%")
-            ->select('id', 'nama as text')
-            ->limit(10) // Sangat cepat karena di-limit
-            ->get();
-        return response()->json($items);
+    public function searchAjax(Request $request) {
+        $q = $request->q;
+        return Item::where('nama', 'LIKE', "%$q%")
+            ->where(function($query) {
+                $query->whereNull('materials')
+                      ->orWhere('materials', '[]'); // Pastikan benar-benar bukan BOM
+            })
+            ->limit(15)
+            ->get(['id', 'nama as text']);
     }
 
     /**
-     * MEGA OPTIMIZED IMPORT: Validasi SQL (Fail-Fast) & Update items_count
+     * [DITIMPA] MEGA OPTIMIZED IMPORT: Timer, Validasi Lengkap (C1-C3) & Fix Counter
      */
     public function importCsv(Request $request)
     {
@@ -195,6 +214,7 @@ class ItemController extends Controller
         $originalFilename = $request->file('file_csv')->getClientOriginalName();
         $filenameOnly = pathinfo($originalFilename, PATHINFO_FILENAME);
 
+        // Cari nama folder unik (seperti Windows Explorer)
         $folderName = $filenameOnly;
         $counter = 1;
         while (Folder::where('nama', $folderName)->exists()) {
@@ -205,6 +225,7 @@ class ItemController extends Controller
         $staging = 'temp_imp_' . Str::random(5);
         $pathForSql = str_replace('\\', '/', $filePath);
 
+        // Buat tabel staging temporary
         DB::statement("CREATE TEMPORARY TABLE $staging (
             nomor INT PRIMARY KEY,
             nama VARCHAR(255) COLLATE utf8mb4_unicode_ci,
@@ -226,7 +247,6 @@ class ItemController extends Controller
         }
 
         // --- VALIDASI SUPER CEPAT (Fail-Fast) ---
-
         // A. Cek Nama Duplikat (CSV vs CSV)
         $dupNameCsv = DB::table($staging)->select('nama')->groupBy('nama')->havingRaw('COUNT(*) > 1')->value('nama');
         if ($dupNameCsv) {
@@ -265,7 +285,7 @@ class ItemController extends Controller
         $selfBom = DB::table($mapTable)->whereRaw("parent = child")->first();
         if ($selfBom) {
             $elapsed = round(microtime(true) - $startTime, 2);
-            return redirect()->back()->with('error', "Import Batal: Item nomor {$selfBom->parent} mereferensikan dirinya sendiri sebagai material. [Pengecekan: {$elapsed} detik]");
+            return redirect()->back()->with('error', "Import Batal: Item nomor {$selfBom->parent} mereferensikan dirinya sendiri sebagai material. [Pengecekan: {$elapsed}s]");
         }
 
         // C2. Rule: Material tidak boleh merupakan BOM (di file yang sama)
@@ -276,10 +296,10 @@ class ItemController extends Controller
             ->first();
         if ($bomAsMaterial) {
             $elapsed = round(microtime(true) - $startTime, 2);
-            return redirect()->back()->with('error', "Import Batal: Item #{$bomAsMaterial->parent} mengandung material #{$bomAsMaterial->child} yang juga merupakan BOM. [Pengecekan: {$elapsed} detik]");
+            return redirect()->back()->with('error', "Import Batal: Item #{$bomAsMaterial->parent} mengandung material #{$bomAsMaterial->child} yang juga merupakan BOM. [Pengecekan: {$elapsed}s]");
         }
 
-        // C3. Rule: Material berulang (Validasi duplikat material asli - Fixed Version)
+        // C3. Rule: Material berulang (Validasi duplikat material asli)
         $dupMat = DB::select("
             SELECT parent, child FROM (
                 SELECT nomor as parent,
@@ -300,12 +320,13 @@ class ItemController extends Controller
         ");
         if (!empty($dupMat)) {
             $elapsed = round(microtime(true) - $startTime, 2);
-            return redirect()->back()->with('error', "Import Batal: Item #{$dupMat[0]->parent} memiliki material #{$dupMat[0]->child} yang dimasukkan berulang kali. [Pengecekan: {$elapsed} detik]");
+            return redirect()->back()->with('error', "Import Batal: Item #{$dupMat[0]->parent} memiliki material #{$dupMat[0]->child} yang dimasukkan berulang kali. [Pengecekan: {$elapsed}s]");
         }
 
         // --- PROSES INSERT MASSAL ---
         DB::beginTransaction();
         try {
+            // 1. Buat Foldernya dulu
             $folder = Folder::create(['nama' => $folderName, 'parent_id' => $request->folder_id]);
             $folder->updatePath();
 
@@ -313,6 +334,7 @@ class ItemController extends Controller
             DB::statement("SET SESSION unique_checks=0");
             DB::statement("SET SESSION foreign_key_checks=0");
 
+            // 2. Insert Items via Raw SQL
             DB::statement("INSERT INTO items (nama, sku, satuan, stok_saat_ini, stok_minimum, harga_jual, harga_beli, note, folder_id, created_at, updated_at)
                 SELECT TRIM(nama), CONCAT('SKU-', nomor, '-', UNIX_TIMESTAMP()), satuan,
                 CASE WHEN (materials IS NOT NULL AND materials <> '') THEN 0 ELSE IFNULL(stok_saat_ini, 0) END,
@@ -321,13 +343,19 @@ class ItemController extends Controller
 
             $this->finalizeImportBomOneShot($staging, $folder->id);
 
-            // FIX: Update items_count secara manual (Raw SQL tidak memicu observer)
+            // 3. Hitung jumlah data yang masuk dari staging
             $totalIn = DB::table($staging)->where('nama', '<>', '')->count();
-            $folder->update(['items_count' => $totalIn]);
+
+            // 4. Update items_count secara manual di tabel folders (PENTING)
+            // Kita pakai update langsung ke DB agar performa tetap kencang
+            DB::table('folders')->where('id', $folder->id)->update(['items_count' => $totalIn]);
+
+            // 5. Urus BOM (Relasi)
+            $this->finalizeImportBomOneShot($staging, $folder->id);
 
             DB::commit();
 
-            // LOG: Pakai Auth::id() agar tidak error
+            // Log Aktivitas
             $userId = Auth::id();
             $msg = "({$userId}) mengimport {$totalIn} data baru ke folder [{$folder->id}]";
             $this->logActivity(null, $folder->id, $msg);
@@ -335,13 +363,16 @@ class ItemController extends Controller
             DB::statement("SET SESSION unique_checks=1");
             DB::statement("SET SESSION foreign_key_checks=1");
 
-            return redirect()->back()->with('success', "Import $totalIn data Berhasil ke folder '$folderName'");
+            $elapsed = round(microtime(true) - $startTime, 2);
+            return redirect()->back()->with('success', "Import $totalIn data Berhasil ke folder '$folderName' dalam waktu $elapsed detik.");
+
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Import Error: " . $e->getMessage());
             return redirect()->back()->with('error', "Gagal: " . $e->getMessage());
         } finally {
             DB::statement("DROP TEMPORARY TABLE IF EXISTS $staging");
+            DB::statement("DROP TEMPORARY TABLE IF EXISTS $mapTable");
         }
     }
 
@@ -395,11 +426,11 @@ class ItemController extends Controller
     }
 
     /**
-     * [FUNGSI BARU] Optimasi Level Dewa untuk relasi BOM.
+     * [DITIMPA/LENGKAP] finalizeImportBomOneShot: Pemrosesan JSON BOM Massal
      */
     private function finalizeImportBomOneShot($staging, $folderId)
     {
-        // Ambil mapping Nama ke ID yang baru saja diinsert
+        // Ambil mapping Nama ke ID yang baru diinsert
         $mapping = DB::table('items')
             ->join($staging, 'items.nama', '=', "$staging.nama")
             ->where('items.folder_id', $folderId)
@@ -412,9 +443,7 @@ class ItemController extends Controller
 
         if ($bomRows->isEmpty()) return;
 
-        // Identifikasi mana saja item yang merupakan BOM (untuk validasi rule: material tidak boleh nomor item BOM)
         $bomNomors = $bomRows->pluck('nomor')->toArray();
-
         $mapTable = 'temp_bom_map_' . Str::random(5);
         DB::statement("CREATE TEMPORARY TABLE $mapTable (item_id INT PRIMARY KEY, final_json JSON)");
 
@@ -423,13 +452,11 @@ class ItemController extends Controller
             $mParts = array_map('trim', explode(',', $row->materials));
             $finalM = [];
             foreach ($mParts as $p) {
-                // Regex untuk handle nomor(qty) atau nomor saja
                 preg_match('/^(\d+)(?:\(([\d.]+)\))?$/', $p, $matches);
                 if ($matches) {
                     $mNum = (int)$matches[1];
                     $mQty = isset($matches[2]) ? (float)$matches[2] : 1.0;
 
-                    // VALIDASI: Material tidak boleh merujuk ke item yang juga BOM di file ini
                     if (in_array($mNum, $bomNomors)) {
                         throw new \Exception("Aturan BOM Dilanggar: Item nomor {$row->nomor} menggunakan material nomor $mNum yang merupakan sesama BOM.");
                     }
@@ -452,6 +479,7 @@ class ItemController extends Controller
         if (!empty($batch)) DB::table($mapTable)->insert($batch);
 
         DB::statement("UPDATE items JOIN $mapTable ON items.id = $mapTable.item_id SET items.materials = $mapTable.final_json");
+        DB::statement("DROP TEMPORARY TABLE IF EXISTS $mapTable");
     }
 
     /**
