@@ -2,30 +2,15 @@
 @section('title', 'Edit: ' . $item->nama)
 
 @section('styles')
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 <style>
-    /* Fix Select2 agar menyatu dengan Bootstrap 5 */
-    .select2-container--bootstrap-5 .select2-selection {
-        border: 1px solid #dee2e6;
-        border-radius: 0.375rem;
-        min-height: 2.5rem;
-        display: flex;
-        align-items: center;
+    .search-results-wrapper { position: relative; }
+    .search-results-list {
+        position: absolute; top: 100%; left: 0; right: 0;
+        z-index: 1000; background: white; border: 1px solid #ddd;
+        max-height: 200px; overflow-y: auto; display: none;
     }
-
-    /* Fix warna teks hitam di dropdown agar tidak silau/hilang */
-    .select2-results__option { color: #333 !important; padding: 8px 12px !important; }
-    .select2-results__option--highlighted { background-color: #895129 !important; color: #fff !important; }
-
-    /* Fix overlap & z-index agar tidak tertutup tombol atau input lain */
-    .select2-container { z-index: 1060 !important; }
-    .select2-dropdown { border: 1px solid #dee2e6 !important; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important; }
-
-    .bg-primary-subtle { background-color: #e7f1ff !important; }
-    .border-primary-subtle { border-color: #cfe2ff !important; }
-    .material-row { transition: all 0.2s ease; border-radius: 8px; }
-    .material-row:hover { background-color: rgba(0,0,0,0.02); }
+    .search-results-list .list-group-item { cursor: pointer; border: none; padding: 8px 12px; }
+    .search-results-list .list-group-item:hover { background: #f8f9fa; color: #895129; }
 </style>
 @endsection
 
@@ -71,13 +56,12 @@
                         <input type="text" name="satuan" class="form-control" value="{{ $item->satuan }}" placeholder="pcs, kg, dll">
                     </div>
 
-                    @if(!$item->is_bom)
-                    <!-- Hanya tampil untuk item biasa, BOM stoknya otomatis kalkulasi -->
-                    <div class="col-md-3 mb-3" id="qty_group">
+                    {{-- Stok dimunculkan untuk Non-BOM --}}
+                    {{-- Kita beri ID agar JS bisa sembunyikan jika BOM di-edit jadi Item --}}
+                    <div class="col-md-3 mb-3" id="qty_group" style="{{ $item->is_bom ? 'display:none;' : '' }}">
                         <label class="form-label small fw-bold text-primary">Stok Saat Ini</label>
                         <input type="number" name="stok_saat_ini" class="form-control border-primary bg-primary-subtle fw-bold" value="{{ $item->stok_saat_ini }}">
                     </div>
-                    @endif
 
                     <div class="col-md-{{ $item->is_bom ? '3' : '2' }} mb-3">
                         <label class="form-label small fw-bold text-danger">Min Stok</label>
@@ -93,56 +77,36 @@
                     </div>
                 </div>
 
-                <!-- LOGIKA BOM (BILL OF MATERIALS) -->
+                <!-- Bagian BOM -->
                 @if($item->is_bom)
-                    <div class="alert alert-primary mb-3 shadow-sm border-0 d-flex align-items-center">
-                        <i class="fas fa-info-circle fa-2x me-3"></i>
-                        <div>
-                            <strong>Mode BOM Aktif.</strong> Anda dapat menambah atau mengurangi material bahan baku.
-                            <br><small>Hapus semua baris material jika ingin mengubah item ini menjadi <b>Item Biasa</b> secara permanen.</small>
-                        </div>
+                    <div class="alert alert-primary mb-3 mt-2">
+                        <i class="fas fa-layer-group me-2"></i> <strong>Item ini adalah BOM.</strong>
+                        Jika seluruh bahan baku di bawah dihapus, item ini akan berubah menjadi <strong>Item Biasa</strong>.
                     </div>
-
-                    <div id="bom_section" class="bg-primary-subtle p-4 rounded mb-4 border border-primary-subtle shadow-inner">
-                        <h6 class="fw-bold mb-3 text-primary"><i class="fas fa-list-ul me-2"></i>Komponen Material (Resep BOM)</h6>
-
+                    <div id="bom_section" class="bg-primary-subtle p-3 rounded mb-4 border border-primary-subtle">
+                        <h6 class="fw-bold mb-3">Komponen Material (Resep)</h6>
                         <div id="bom_rows">
-                            @if(is_array($item->materials))
-                                @foreach($item->materials as $mat)
-                                <div class="row g-2 mb-2 material-row align-items-center">
-                                    <div class="col-7">
-                                        <select class="form-select mat-id shadow-sm" required>
-                                            <option value="{{ $mat['item_id'] }}" selected>{{ $materialNames[$mat['item_id']] ?? 'Item #'.$mat['item_id'] }}</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-3">
-                                        <div class="input-group shadow-sm">
-                                            <input type="number" step="0.01" class="form-control mat-qty" value="{{ $mat['qty'] }}" required>
-                                            <span class="input-group-text bg-white small">qty</span>
-                                        </div>
-                                    </div>
-                                    <div class="col-2 text-end">
-                                        <button type="button" class="btn btn-outline-danger w-100 border-0" onclick="this.parentElement.parentElement.remove()">
-                                            <i class="fas fa-trash-alt"></i>
-                                        </button>
-                                    </div>
+                            @foreach($item->materials as $mat)
+                            <div class="row g-2 mb-2 material-row align-items-center">
+                                <div class="col-7 search-results-wrapper">
+                                    <input type="text" class="form-control mat-search-input" value="{{ $materialNames[$mat['item_id']] ?? 'Item #'.$mat['item_id'] }}" autocomplete="off">
+                                    <input type="hidden" class="mat-id" value="{{ $mat['item_id'] }}">
+                                    <div class="search-results-list list-group shadow-sm"></div>
                                 </div>
-                                @endforeach
-                            @endif
+                                <div class="col-3">
+                                    <input type="number" step="0.01" class="form-control mat-qty" value="{{ $mat['qty'] }}">
+                                </div>
+                                <div class="col-2">
+                                    <button type="button" class="btn btn-danger w-100" onclick="$(this).closest('.material-row').remove(); checkBomStatus();"><i class="fas fa-times"></i></button>
+                                </div>
+                            </div>
+                            @endforeach
                         </div>
-
-                        <button type="button" class="btn btn-primary mt-2 shadow-sm fw-bold px-3" id="add_material_btn">
-                            <i class="fas fa-plus me-1"></i> Tambah Bahan Baku
-                        </button>
-                        <!-- Data dikirim sebagai JSON string melalui input hidden ini -->
-                        <input type="hidden" name="materials_data" id="materials_data">
-                    </div>
-                @else
-                    <div class="alert alert-secondary mb-3 border-0">
-                        <i class="fas fa-lock me-2"></i> Item ini adalah <strong>Item Biasa</strong>.
-                        <small class="d-block">Sesuai aturan, Item Biasa tidak dapat diubah menjadi BOM melalui menu Edit untuk menjaga integritas data.</small>
+                        <button type="button" class="btn btn-sm btn-primary mt-2" id="add_material_btn"><i class="fas fa-plus me-1"></i> Tambah Bahan Baku</button>
                     </div>
                 @endif
+
+                <input type="hidden" name="materials_data" id="materials_data">
 
                 <!-- TAGS & NOTE -->
                 <div class="row mt-2">
@@ -161,91 +125,68 @@
 </div>
 
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
     $(document).ready(function() {
-        // --- 1. Fungsi Inisialisasi Select2 AJAX ---
-        function initMaterialSelect(el) {
-            $(el).select2({
-                theme: 'bootstrap-5',
-                placeholder: 'Cari bahan baku...',
-                minimumInputLength: 0,
-                allowClear: true,
-                width: '100%',
-                ajax: {
-                    url: "{{ route('item.search.ajax') }}",
-                    dataType: 'json',
-                    delay: 250,
-                    data: function(params) {
-                        return { q: params.term || '' };
-                    },
-                    processResults: function(data) {
-                        return { results: data };
-                    },
-                    cache: true
-                },
-                // [FIX] Menentukan parent dropdown agar tidak overlap atau posisi ngaco
-                dropdownParent: $(el).closest('.card')
-            });
+        // Fungsi untuk mengecek jika BOM berubah jadi item (karena material kosong)
+        window.checkBomStatus = function() {
+            const rows = $('.material-row').length;
+            if (rows === 0) {
+                $('#qty_group').fadeIn();
+            } else {
+                $('#qty_group').fadeOut();
+            }
         }
 
-        // Jalankan Select2 untuk baris yang sudah ada saat halaman dimuat
-        $('.mat-id').each(function() {
-            initMaterialSelect(this);
-        });
-
-        // --- 2. Event Klik Tambah Bahan Baku ---
+        // Search logic sama dengan sebelumnya
         $('#add_material_btn').on('click', function() {
             const rowId = 'mat-' + Date.now();
             const html = `
-                <div class="row g-2 mb-2 material-row align-items-center" id="${rowId}">
-                    <div class="col-7">
-                        <select class="form-select mat-id shadow-sm" required></select>
+                <div class="row g-2 mb-2 material-row" id="${rowId}">
+                    <div class="col-7 search-results-wrapper">
+                        <input type="text" class="form-control mat-search-input" placeholder="Cari..." autocomplete="off">
+                        <input type="hidden" class="mat-id">
+                        <div class="search-results-list list-group"></div>
                     </div>
-                    <div class="col-3">
-                        <div class="input-group shadow-sm">
-                            <input type="number" step="0.01" class="form-control mat-qty" placeholder="0.00" value="1" required>
-                            <span class="input-group-text bg-white small">qty</span>
-                        </div>
-                    </div>
-                    <div class="col-2">
-                        <button type="button" class="btn btn-outline-danger w-100 border-0" onclick="$('#${rowId}').remove()">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                    </div>
+                    <div class="col-3"><input type="number" step="0.01" class="form-control mat-qty" value="1"></div>
+                    <div class="col-2"><button type="button" class="btn btn-danger w-100" onclick="$(this).closest('.material-row').remove(); checkBomStatus();"><i class="fas fa-times"></i></button></div>
                 </div>`;
-
             $('#bom_rows').append(html);
-            initMaterialSelect($(`#${rowId} .mat-id`));
-
-            // Langsung buka dropdown setelah baris baru dibuat (UX Speed)
-            $(`#${rowId} .mat-id`).select2('open');
+            checkBomStatus();
         });
 
-        // --- 3. Pre-Processing sebelum Form dikirim ---
-        $('#mainForm').on('submit', function(e) {
-            // Kita hanya memproses data material jika item tersebut memang BOM
-            @if($item->is_bom)
-                const mats = [];
-                let isValid = true;
+        $(document).on('keyup', '.mat-search-input', function() {
+            let query = $(this).val();
+            let wrapper = $(this).closest('.search-results-wrapper');
+            let list = wrapper.find('.search-results-list');
+            if (query.length < 2) { list.hide(); return; }
+            $.ajax({
+                url: "{{ route('item.search.ajax') }}",
+                data: { q: query },
+                success: function(data) {
+                    list.empty();
+                    data.forEach(item => {
+                        list.append(`<div class="list-group-item" data-id="${item.id}" data-name="${item.text}">${item.text}</div>`);
+                    });
+                    list.show();
+                }
+            });
+        });
 
-                $('.material-row').each(function() {
-                    const id = $(this).find('.mat-id').val();
-                    const qty = $(this).find('.mat-qty').val();
+        $(document).on('click', '.list-group-item[data-id]', function() {
+            let wrapper = $(this).closest('.search-results-wrapper');
+            wrapper.find('.mat-search-input').val($(this).data('name'));
+            wrapper.find('.mat-id').val($(this).data('id'));
+            $('.search-results-list').hide();
+        });
 
-                    if(id && qty) {
-                        mats.push({
-                            item_id: parseInt(id),
-                            qty: parseFloat(qty)
-                        });
-                    } else {
-                        isValid = false;
-                    }
-                });
-
-                // Set value ke input hidden agar controller bisa baca JSON-nya
-                $('#materials_data').val(JSON.stringify(mats));
-            @endif
+        $('#mainForm').on('submit', function() {
+            const mats = [];
+            $('.material-row').each(function() {
+                const id = $(this).find('.mat-id').val();
+                const qty = $(this).find('.mat-qty').val();
+                if(id && qty) mats.push({ item_id: id, qty: qty });
+            });
+            $('#materials_data').val(JSON.stringify(mats));
         });
     });
 </script>

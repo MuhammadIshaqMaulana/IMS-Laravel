@@ -238,8 +238,8 @@
                                 @forelse($history as $h)
                                 <tr>
                                     <td class="ps-4 small text-muted">
-                                        {{ $h->tanggal_produksi->format('d M Y') }}
-                                        <div style="font-size: 0.7rem;">{{ $h->tanggal_produksi->format('H:i') }} WIB</div>
+                                        {{ $h->created_at->format('d M Y') }}
+                                        <div style="font-size: 0.7rem;">{{ $h->created_at->format('H:i') }} WIB</div>
                                     </td>
                                     <td class="small fw-medium">{{ $h->catatan }}</td>
                                     <td class="text-end pe-4 fw-bold {{ $h->jumlah_produksi >= 0 ? 'text-success' : 'text-danger' }}">

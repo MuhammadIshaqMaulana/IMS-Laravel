@@ -151,39 +151,73 @@ class ItemController extends Controller
         return view('item.edit', compact('item', 'allFolders', 'materialNames'));
     }
 
-/**
-     * [DITIMPA] Update: Mengunci aturan BOM (BOM -> Item bisa, Item -> BOM dilarang)
+    /**
+     * [DITIMPA] Update: Memperbaiki logika update stok agar tidak tertukar antara BOM dan Non-BOM
+     * Serta menangani transisi BOM menjadi Item Biasa jika material dikosongkan.
      */
     public function update(Request $request, Item $item)
     {
+        // 1. Validasi Nama Duplikat
         if (Item::where('nama', $request->nama)->where('id', '!=', $item->id)->exists()) {
             return redirect()->back()->with('error', "Nama '{$request->nama}' sudah digunakan item lain.");
         }
 
         $oldName = $item->nama;
-        $data = $request->except(['materials_data', 'is_bom_check']);
+        $oldFolderId = $item->folder_id ? (int)$item->folder_id : null;
+        $newFolderId = $request->folder_id ? (int)$request->folder_id : null;
 
-        // LOGIKA INTEGRITAS BOM
+        // 2. Ambil data dasar
+        $data = $request->only(['nama', 'folder_id', 'satuan', 'stok_minimum', 'harga_beli', 'harga_jual', 'note']);
+
+        // 3. Handle Tags
+        if ($request->has('tags_input')) {
+            $data['tags'] = array_filter(array_map('trim', explode(',', $request->tags_input))) ?: null;
+        }
+
+        // 4. LOGIKA INTEGRITAS (BOM vs NON-BOM)
         if ($item->is_bom) {
-            // Jika awalnya adalah BOM, kita proses material_data
-            if ($request->has('materials_data')) {
-                $mats = json_decode($request->materials_data, true);
-                // Jika user hapus semua material, dia berubah jadi Item biasa (NULL)
-                $data['materials'] = (!empty($mats)) ? $mats : null;
+            // Jika asalnya BOM, cek apakah material dikosongkan (berubah jadi Item Biasa)
+            $decodedMaterials = json_decode($request->materials_data, true);
+            $finalMaterials = (!empty($decodedMaterials)) ? $decodedMaterials : null;
 
-                // Jika berubah jadi item biasa, stok saat ini mungkin perlu diisi manual lagi nanti
-                // tapi untuk sekarang kita biarkan mengikuti flow update field.
+            if ($finalMaterials === null) {
+                // RULE: BOM berubah jadi Item Biasa jika material kosong
+                $data['materials'] = null;
+                $data['stok_saat_ini'] = $request->stok_saat_ini ?? 0;
+            } else {
+                // Tetap BOM
+                $data['materials'] = $finalMaterials;
+                // Jangan sentuh stok_saat_ini karena ini BOM (stok dihitung otomatis)
             }
         } else {
-            // Jika awalnya Item Biasa, JANGAN PERNAH izinkan input materials masuk
+            // RULE: Item Biasa tidak bisa jadi BOM, langsung update stok fisik
+            $data['stok_saat_ini'] = $request->stok_saat_ini ?? 0;
             $data['materials'] = null;
         }
 
-        $item->update($data);
-        $this->logActivity($item->id, 0, "Update: '{$oldName}' -> '{$item->nama}'");
-        return redirect()->route('item.show', $item->id)->with('success', 'Data diperbarui.');
-    }
+        // 5. Eksekusi dengan Transaction
+        DB::beginTransaction();
+        try {
+            // SINKRONISASI FOLDER COUNTER (Jika folder berubah)
+            if ($oldFolderId !== $newFolderId) {
+                if ($oldFolderId) Folder::where('id', $oldFolderId)->decrement('items_count');
+                if ($newFolderId) Folder::where('id', $newFolderId)->increment('items_count');
+            }
 
+            // Simpan perubahan
+            $item->update($data);
+
+            $userId = Auth::id();
+            $this->logActivity($item->id, 0, "({$userId}) Update Item: '{$oldName}' -> '{$item->nama}'");
+
+            DB::commit();
+            return redirect()->route('item.show', $item->id)->with('success', 'Data berhasil diperbarui.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Update Error: " . $e->getMessage());
+            return redirect()->back()->with('error', 'Gagal update: ' . $e->getMessage());
+        }
+    }
 
 
     /**
@@ -573,12 +607,65 @@ class ItemController extends Controller
         return redirect()->back()->with('success', 'Stok massal berhasil diperbarui.');
     }
 
-    public function bulkUpdate(Request $request) {
+    /**
+     * [DITIMPA] Bulk Update: Memperbaiki mapping field (_value) dan update folder massal.
+     */
+    public function bulkUpdate(Request $request)
+    {
         $ids = json_decode($request->selected_items, true);
-        $field = $request->filled('harga_jual_value') ? 'Harga Jual' : 'Satuan/Note';
-        Item::whereIn('id', $ids)->update($request->only(['harga_jual', 'harga_beli', 'satuan', 'stok_minimum', 'note']));
-        $this->logActivity(null, count($ids), "Bulk Update {$field} pada " . count($ids) . " item.");
-        return redirect()->back()->with('success', 'Update massal berhasil.');
+        if (!$ids || count($ids) == 0) return redirect()->back()->with('error', 'Tidak ada item terpilih.');
+
+        // Mapping input modal ke kolom DB
+        $updateData = [];
+        if ($request->filled('harga_beli_value'))   $updateData['harga_beli'] = $request->harga_beli_value;
+        if ($request->filled('harga_jual_value'))   $updateData['harga_jual'] = $request->harga_jual_value;
+        if ($request->filled('min_level_value'))    $updateData['stok_minimum'] = $request->min_level_value;
+        if ($request->filled('satuan_value'))       $updateData['satuan'] = $request->satuan_value;
+        if ($request->filled('note_value'))         $updateData['note'] = $request->note_value;
+
+        DB::beginTransaction();
+        try {
+            // 1. Handle Pindah Folder (Jika ada input folder_id_value)
+            if ($request->filled('folder_id_value')) {
+                $newFolderId = $request->folder_id_value === 'NULL' ? null : $request->folder_id_value;
+
+                foreach (Item::whereIn('id', $ids)->get() as $item) {
+                    $oldFolderId = $item->folder_id;
+                    if ($oldFolderId == $newFolderId) continue;
+
+                    $item->update(['folder_id' => $newFolderId]);
+
+                    // Update counters di tabel folders
+                    if ($oldFolderId) Folder::where('id', $oldFolderId)->decrement('items_count');
+                    if ($newFolderId) Folder::where('id', $newFolderId)->increment('items_count');
+                }
+            }
+
+            // 2. Handle Tags (Jika ada input tags_input_value)
+            if ($request->filled('tags_input_value')) {
+                $newTags = array_filter(array_map('trim', explode(',', $request->tags_input_value)));
+                foreach (Item::whereIn('id', $ids)->get() as $item) {
+                    $currentTags = is_array($item->tags) ? $item->tags : [];
+                    // Kita "Append" tag baru agar tidak menghapus tag lama (sesuai instruksi 'Tambah Tags')
+                    $mergedTags = array_unique(array_merge($currentTags, $newTags));
+                    $item->update(['tags' => $mergedTags]);
+                }
+            }
+
+            // 3. Update field standar lainnya secara massal
+            if (!empty($updateData)) {
+                Item::whereIn('id', $ids)->update($updateData);
+            }
+
+            $userId = Auth::id();
+            $this->logActivity(null, 0, "({$userId}) melakukan Bulk Update pada " . count($ids) . " item.");
+
+            DB::commit();
+            return redirect()->back()->with('success', 'Update massal berhasil diterapkan.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()->with('error', 'Gagal update massal: ' . $e->getMessage());
+        }
     }
 
     /**
