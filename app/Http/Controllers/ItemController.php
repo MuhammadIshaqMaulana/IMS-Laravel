@@ -91,20 +91,17 @@ class ItemController extends Controller
     }
 
     /**
-     * [DITIMPA] Store: Mengolah materials_data menjadi array asli atau NULL
+     * [DITIMPA] Store: Menggunakan template (User) membuat item `Nama` di folder [Folder]
      */
     public function store(Request $request)
     {
         $request->validate(['nama' => 'required|string|max:100', 'type' => 'required|in:item,folder']);
         $user = Auth::user();
-        $userId = $user->id;
         $userName = $user->name;
 
-        // Ambil nama folder eksekusi untuk log
         $execFolder = $request->folder_id ? Folder::find($request->folder_id) : null;
         $execFolderName = $execFolder ? $execFolder->nama : 'ROOT';
 
-        // 1. RULE: Proteksi Duplikasi Nama (FAIL-FAST)
         if ($request->type === 'folder') {
             if (Folder::where('nama', $request->nama)->exists()) return redirect()->back()->with('error', "Folder '{$request->nama}' sudah ada.");
         } else {
@@ -116,6 +113,7 @@ class ItemController extends Controller
             if ($request->type === 'folder') {
                 $folder = Folder::create(['nama' => $request->nama, 'parent_id' => $request->folder_id]);
                 $folder->updatePath();
+                // LOG: Create Folder
                 $this->logActivity(null, $request->folder_id, "({$userName}) membuat folder `{$folder->nama}` di folder [{$execFolderName}]");
             } else {
                 $decodedMaterials = json_decode($request->materials_data, true);
@@ -124,7 +122,6 @@ class ItemController extends Controller
                 $tagsArr = array_filter(array_map('trim', explode(',', $request->tags_input ?? ''))) ?: null;
 
                 if (empty($variants)) {
-                    // Create Single: SEMUA FIELD MASUK
                     $item = Item::create([
                         'nama' => $request->nama,
                         'sku' => ($finalMaterials) ? 'BOM-' . strtoupper(Str::random(6)) : $this->generateUniqueSku($request->nama),
@@ -138,13 +135,13 @@ class ItemController extends Controller
                         'note' => $request->note,
                         'tags' => $tagsArr,
                     ]);
+                    // LOG: Create Single Item/BOM
                     $this->logActivity($item->id, $request->folder_id, "({$userName}) membuat item/BOM `{$item->nama}` di folder [{$execFolderName}]");
                 } else {
-                    // Create Multi Varian: SEMUA FIELD MASUK KE SETIAP VARIAN
                     $combinations = $this->generateCombinations($variants);
                     foreach ($combinations as $combo) {
                         $vName = $request->nama . ' - ' . implode(', ', $combo);
-                        if (Item::where('nama', $vName)->exists()) continue; // Proteksi duplikasi varian
+                        if (Item::where('nama', $vName)->exists()) continue;
 
                         Item::create([
                             'nama' => $vName,
@@ -161,6 +158,7 @@ class ItemController extends Controller
                         ]);
                     }
                     $countV = count($combinations);
+                    // LOG: Create Multi-varian
                     $this->logActivity(null, $request->folder_id, "({$userName}) membuat item/BOM dengan \"{$countV}\" varian di folder [{$execFolderName}]");
                 }
             }
@@ -195,7 +193,7 @@ class ItemController extends Controller
     }
 
     /**
-     * [DITIMPA] Update: Logika pencatatan yang presisi (Nama Lama, Stok vs Material).
+     * [DITIMPA] Update: Mencatat log perubahan field spesifik dengan simbol ~~ dan ``
      */
     public function update(Request $request, Item $item)
     {
@@ -205,9 +203,10 @@ class ItemController extends Controller
 
         $user = Auth::user();
         $userName = $user->name;
-        $oldFolder = $item->folder ? $item->folder->nama : 'ROOT';
-        $newFolderObj = $request->folder_id ? Folder::find($request->folder_id) : null;
-        $newFolderName = $newFolderObj ? $newFolderObj->nama : 'ROOT';
+        $execFolderObj = $item->folder;
+        $execFolderName = $execFolderObj ? $execFolderObj->nama : 'ROOT';
+        $targetFolderObj = $request->folder_id ? Folder::find($request->folder_id) : null;
+        $targetFolderName = $targetFolderObj ? $targetFolderObj->nama : 'ROOT';
 
         DB::beginTransaction();
         try {
@@ -215,28 +214,28 @@ class ItemController extends Controller
             if ($item->folder_id != $request->folder_id) {
                 if ($item->folder_id) Folder::where('id', $item->folder_id)->decrement('items_count');
                 if ($request->folder_id) Folder::where('id', $request->folder_id)->increment('items_count');
-                $this->logActivity($item->id, $item->folder_id, "({$userName}) memindahkan item/BOM `{$item->nama}` dari folder [{$oldFolder}] ke folder -{$newFolderName}-");
+                $this->logActivity($item->id, $item->folder_id, "({$userName}) memindahkan item/BOM `{$item->nama}` dari folder [{$execFolderName}] ke folder -{$targetFolderName}-");
             }
 
-            // 2. Update Nama (Capture Nama Lama)
+            // 2. Update Nama (Single update nama item/BOM)
             if ($request->nama !== $item->nama) {
-                $this->logActivity($item->id, $request->folder_id, "({$userName}) update nama dari item/BOM `{$item->nama}` menjadi ~{$request->nama}~ di folder [{$newFolderName}]");
+                $this->logActivity($item->id, $request->folder_id, "({$userName}) update nama dari item/BOM `{$item->nama}` menjadi ~{$request->nama}~ di folder [{$execFolderName}]");
             }
 
             // 3. Update Material (BOM)
             if ($item->is_bom && $request->has('materials_data')) {
                 $newMats = json_decode($request->materials_data, true);
                 if (json_encode($item->materials) !== json_encode($newMats)) {
-                    $this->logActivity($item->id, $request->folder_id, "({$userName}) update material dari BOM `{$item->nama}` di folder [{$newFolderName}]");
+                    $this->logActivity($item->id, $request->folder_id, "({$userName}) update material dari BOM `{$item->nama}` di folder [{$execFolderName}]");
                 }
             }
 
-            // 4. Update Stok Single (Hanya Item Fisik)
+            // 4. Update Stok Single (Item Fisik)
             if (!$item->is_bom && $request->has('stok_saat_ini')) {
                 if ((float)$request->stok_saat_ini !== (float)$item->stok_saat_ini) {
                     $diff = (float)$request->stok_saat_ini - (float)$item->stok_saat_ini;
                     $prefix = $diff >= 0 ? "+$diff" : "$diff";
-                    $this->logActivity($item->id, $request->folder_id, "({$userName}) update stok dari item `{$item->nama}` menjadi '{$prefix}' di folder [{$newFolderName}]");
+                    $this->logActivity($item->id, $request->folder_id, "({$userName}) update stok dari item `{$item->nama}` menjadi '{$prefix}' di folder [{$execFolderName}]");
                 }
             }
 
@@ -245,7 +244,7 @@ class ItemController extends Controller
             foreach ($fields as $field) {
                 if ($request->has($field) && $request->$field != $item->$field) {
                     $label = str_replace('_', ' ', $field);
-                    $this->logActivity($item->id, $request->folder_id, "({$userName}) update {$label} dari item/BOM `{$item->nama}` menjadi ~{$request->$field}~ di folder [{$newFolderName}]");
+                    $this->logActivity($item->id, $request->folder_id, "({$userName}) update {$label} dari item/BOM `{$item->nama}` menjadi ~{$request->$field}~ di folder [{$execFolderName}]");
                 }
             }
 
@@ -437,9 +436,10 @@ class ItemController extends Controller
             DB::commit();
 
             // Log Aktivitas
-            $userId = Auth::id();
-            $msg = "({$userId}) mengimport {$totalIn} data baru ke folder [{$folder->id}]";
-            $this->logActivity(null, $folder->id, $msg);
+            $user = Auth::user();
+            $userName = $user->name;
+
+            $this->logActivity(null, $folder->id, "({$userName}) mengimport \"{$totalIn}\" data baru ke folder [{$folderName}]");
 
             DB::statement("SET SESSION unique_checks=1");
             DB::statement("SET SESSION foreign_key_checks=1");
@@ -458,15 +458,17 @@ class ItemController extends Controller
     }
 
     /**
-     * [DITIMPA] Move Item/Folder: Logic update folder_id dan counter items_count
+     * [DITIMPA] move: Logik Move Single/Folder dengan hardcoded name
      */
     public function move(Request $request) {
         $user = Auth::user();
         $target = ($request->target_type === 'item') ? Item::findOrFail($request->id) : Folder::findOrFail($request->id);
-        $oldFId = $target->folder_id ?: ($request->target_type === 'folder' ? $target->parent_id : 0);
-        $oldFName = $target->folder ? $target->folder->nama : ($request->target_type === 'folder' && $target->parent ? $target->parent->nama : 'ROOT');
 
-        $newFId = $request->folder_id ?: 0;
+        $oldF = $target->folder ?: ($request->target_type === 'folder' && $target->parent ? $target->parent : null);
+        $oldFName = $oldF ? $oldF->nama : 'ROOT';
+        $oldFId = $oldF ? $oldF->id : null;
+
+        $newFId = $request->folder_id ?: null;
         $newFObj = $request->folder_id ? Folder::find($request->folder_id) : null;
         $newFName = $newFObj ? $newFObj->nama : 'ROOT';
 
@@ -475,12 +477,12 @@ class ItemController extends Controller
         DB::beginTransaction();
         try {
             if ($request->target_type === 'item') {
-                $target->update(['folder_id' => $request->folder_id ?: null]);
+                $target->update(['folder_id' => $newFId]);
                 if ($oldFId) Folder::where('id', $oldFId)->decrement('items_count');
                 if ($newFId) Folder::where('id', $newFId)->increment('items_count');
                 $this->logActivity($target->id, $oldFId, "({$user->name}) memindahkan item/BOM `{$target->nama}` dari folder [{$oldFName}] ke folder -{$newFName}-");
             } else {
-                $target->update(['parent_id' => $request->folder_id ?: null]);
+                $target->update(['parent_id' => $newFId]);
                 $target->updatePath();
                 $this->syncDescendantPaths($target);
                 $this->logActivity(null, $oldFId, "({$user->name}) memindahkan folder `{$target->nama}` dari folder [{$oldFName}] ke folder -{$newFName}-");
@@ -488,6 +490,10 @@ class ItemController extends Controller
             DB::commit(); return redirect()->back()->with('success', 'Berhasil dipindahkan.');
         } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', $e->getMessage()); }
     }
+
+
+
+
     /**
      * [DITIMPA/LENGKAP] finalizeImportBomOneShot: Pemrosesan JSON BOM Massal
      */
@@ -592,13 +598,15 @@ class ItemController extends Controller
     }
 
     /**
-     * BULK ACTIONS (Clone, Qty, Edit Field).
+     * [DITIMPA] bulkClone: Mencatat (User) clone "Jumlah" item di folder [Folder]
      */
     public function bulkClone(Request $request) {
-        $userId = Auth::id();
+        $user = Auth::user();
         $ids = json_decode($request->selected_items, true);
         $firstItem = Item::find($ids[0]);
-        $execF = $firstItem ? ($firstItem->folder_id ?: 0) : 0;
+        $execF = $firstItem ? ($firstItem->folder ? $firstItem->folder->nama : 'ROOT') : 'ROOT';
+        $execFId = $firstItem ? $firstItem->folder_id : null;
+
         foreach ($ids as $id) {
             $original = Item::find($id);
             if($original) {
@@ -609,44 +617,48 @@ class ItemController extends Controller
             }
         }
         $count = count($ids);
-        // LOG: Bulk Clone
-        $this->logActivity(null, $execF, "({$userId}) clone \"{$count}\" item di folder [{$execF}]");
+        $this->logActivity(null, $execFId, "({$user->name}) clone \"{$count}\" item di folder [{$execF}]");
         return redirect()->back()->with('success', 'Berhasil.');
     }
 
     /**
-     * [DITIMPA] Bulk Update Quantity: Format catatan sesuai request
+     * [DITIMPA] bulkUpdateQuantity: Mencatat (User) update stok dari "Jumlah" item menjadi 'Qty' di folder [Folder]
      */
     public function bulkUpdateQuantity(Request $request) {
-        $userId = Auth::id();
+        $user = Auth::user();
         $ids = json_decode($request->selected_items, true);
         $change = (float) $request->qty_adjustment;
         $prefix = $change >= 0 ? "+$change" : "$change";
+
         $firstItem = Item::find($ids[0]);
-        $execF = $firstItem ? ($firstItem->folder_id ?: 0) : 0;
+        $execFId = $firstItem ? $firstItem->folder_id : null;
+        $execFName = $firstItem && $firstItem->folder ? $firstItem->folder->nama : 'ROOT';
+
         Item::whereIn('id', $ids)->whereNull('materials')->increment('stok_saat_ini', $change);
+
         $count = count($ids);
-        // LOG: Bulk Update Stok
-        $this->logActivity(null, $execF, "({$userId}) update stok dari \"{$count}\" item menjadi '{$prefix}' di folder [{$execF}]");
+        $this->logActivity(null, $execFId, "({$user->name}) update stok dari \"{$count}\" item menjadi '{$prefix}' di folder [{$execFName}]");
         return redirect()->back()->with('success', 'Berhasil.');
     }
 
 
     /**
-     * [DITIMPA] Bulk Update: Memperbaiki mapping field (_value) dan update folder massal.
+     * [DITIMPA] bulkUpdate: Log Bulk Move dan Bulk Field Update
      */
     public function bulkUpdate(Request $request) {
-        $userId = Auth::id();
+        $user = Auth::user();
         $ids = json_decode($request->selected_items, true);
         $firstItem = Item::find($ids[0]);
-        $execFolderId = $firstItem ? ($firstItem->folder_id ?: 0) : 0;
+        $execFId = $firstItem ? $firstItem->folder_id : null;
+        $execFName = $firstItem && $firstItem->folder ? $firstItem->folder->nama : 'ROOT';
         $count = count($ids);
 
         DB::beginTransaction();
         try {
+            // Bulk Move
             if ($request->filled('folder_id_value')) {
                 $newF = $request->folder_id_value === 'NULL' ? null : $request->folder_id_value;
-                $newFId = $newF ?: 0;
+                $newFName = $newF ? Folder::find($newF)->nama : 'ROOT';
                 foreach(Item::whereIn('id', $ids)->get() as $item) {
                     if($item->folder_id != $newF) {
                         if($item->folder_id) Folder::where('id', $item->folder_id)->decrement('items_count');
@@ -654,26 +666,54 @@ class ItemController extends Controller
                         $item->update(['folder_id' => $newF]);
                     }
                 }
-                $this->logActivity(null, $execFolderId, "({$userId}) memindahkan \"{$count}\" item/BOM dari folder [{$execFolderId}] ke folder -{$newFId}-");
+                $this->logActivity(null, $execFId, "({$user->name}) memindahkan \"{$count}\" item/BOM dari folder [{$execFName}] ke folder -{$newFName}-");
             }
-            // ... Logic tags & field lainnya tetap sama, pastikan gunakan simbol "" dan ~~ ...
+
+            // Bulk Edit Field (Hrg Jual, Hrg Beli, Satuan, Note)
+            $map = [
+                'harga_beli_value' => 'harga beli',
+                'harga_jual_value' => 'harga jual',
+                'satuan_value' => 'satuan',
+                'note_value' => 'note'
+            ];
+            foreach($map as $reqKey => $dbLabel) {
+                if($request->filled($reqKey)) {
+                    $dbKey = str_replace('_value', '', $reqKey);
+                    Item::whereIn('id', $ids)->update([$dbKey => $request->$reqKey]);
+                    $this->logActivity(null, $execFId, "({$user->name}) update {$dbLabel} dari \"{$count}\" item/BOM menjadi ~{$request->$reqKey}~ di folder [{$execFName}]");
+                }
+            }
+
+            // Bulk Add Tags
+            if ($request->filled('tags_input_value')) {
+                $newTags = array_filter(array_map('trim', explode(',', $request->tags_input_value)));
+                foreach(Item::whereIn('id', $ids)->get() as $item) {
+                    $tagsArr = is_array($item->tags) ? $item->tags : [];
+                    $merged = array_unique(array_merge($tagsArr, $newTags));
+                    $item->update(['tags' => $merged]);
+                }
+                $this->logActivity(null, $execFId, "({$user->name}) menambahkan tag dari \"{$count}\" item yaitu ~{$request->tags_input_value}~ di folder [{$execFName}]");
+            }
+
             DB::commit(); return redirect()->back()->with('success', 'Bulk update berhasil.');
         } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', $e->getMessage()); }
     }
 
 
     /**
-     * [BARU] Bulk Actions & Audit Log
+     * [DITIMPA] bulkDelete: Mencatat (User) menghapus "Jumlah" item di folder [Folder]
      */
     public function bulkDelete(Request $request) {
-        $userId = Auth::id();
+        $user = Auth::user();
         $ids = json_decode($request->selected_items, true);
         $firstItem = Item::find($ids[0]);
-        $execF = $firstItem ? ($firstItem->folder_id ?: 0) : 0;
-        $count = count($ids);
+        $execFId = $firstItem ? $firstItem->folder_id : null;
+        $execFName = $firstItem && $firstItem->folder ? $firstItem->folder->nama : 'ROOT';
+
         Item::whereIn('id', $ids)->delete();
-        // LOG: Bulk Delete
-        $this->logActivity(null, $execF, "({$userId}) menghapus \"{$count}\" item/BOM di folder [{$execF}]");
+
+        $count = count($ids);
+        $this->logActivity(null, $execFId, "({$user->name}) menghapus \"{$count}\" item/BOM di folder [{$execFName}]");
         return redirect()->back()->with('success', 'Dihapus.');
     }
 
@@ -749,57 +789,68 @@ class ItemController extends Controller
         ]);
     }
 
+    /**
+     * [DITIMPA] updateQuantity: Update stok single dengan pattern 'Qty'
+     */
     public function updateQuantity(Request $request, Item $item) {
-        $userId = Auth::id();
-        $execFolderId = $item->folder_id ?: 0;
+        $user = Auth::user();
+        $execFId = $item->folder_id;
+        $execFName = $item->folder ? $item->folder->nama : 'ROOT';
         $qty = $request->qty;
         $prefix = $qty >= 0 ? "+$qty" : "$qty";
 
         $item->increment('stok_saat_ini', $qty);
-
-        // [LOG BARU] Update Stok Single
-        $this->logActivity($item->id, $execFolderId, "({$userId}) update stok dari item <{$item->id}> menjadi '{$prefix}' di folder [{$execFolderId}]");
+        $this->logActivity($item->id, $execFId, "({$user->name}) update stok dari item `{$item->nama}` menjadi '{$prefix}' di folder [{$execFName}]");
         return redirect()->back()->with('success', 'Stok diperbarui.');
     }
 
     /**
-     * Update Folder: Validasi Nama Duplikat
+     * [DITIMPA] updateFolder: Update nama folder
      */
     public function updateFolder(Request $request, Folder $folder) {
-        $userId = Auth::id();
-        $execF = $folder->parent_id ?: 0;
+        $user = Auth::user();
+        $execFId = $folder->parent_id;
+        $execFName = $folder->parent ? $folder->parent->nama : 'ROOT';
+
         if (Folder::where('nama', $request->nama)->where('id', '!=', $folder->id)->exists()) return redirect()->back()->with('error', "Nama sudah ada.");
+
         $oldName = $folder->nama;
         $folder->update(['nama' => $request->nama]);
-        // LOG: Update Folder Name
-        $this->logActivity(null, $execF, "({$userId}) update nama folder `{$oldName}` menjadi ~{$request->nama}~ di folder [{$execF}]");
+
+        $this->logActivity(null, $execFId, "({$user->name}) update nama folder `{$oldName}` menjadi ~{$request->nama}~ di folder [{$execFName}]");
         return redirect()->back();
     }
 
+    /**
+     * [DITIMPA] destroy: Delete single item
+     */
     public function destroy(Item $item) {
         $user = Auth::user();
-        $folderName = $item->folder ? $item->folder->nama : 'ROOT';
-        $namaLama = $item->nama;
+        $execFName = $item->folder ? $item->folder->nama : 'ROOT';
+        $oldName = $item->nama;
         $folderId = $item->folder_id;
+
         $item->delete();
-        $this->logActivity(null, $folderId, "({$user->name}) menghapus item/BOM `{$namaLama}` di folder [{$folderName}]");
+        $this->logActivity(null, $folderId, "({$user->name}) menghapus item/BOM `{$oldName}` di folder [{$execFName}]");
         return redirect()->route('item.index');
     }
 
     /**
-     * DELETE FOLDER RECURSIVE: Menghapus folder, sub-folder, dan semua item di dalamnya.
+     * [DITIMPA] destroyFolder: Delete folder
      */
     public function destroyFolder(Folder $folder) {
         $user = Auth::user();
-        $pId = $folder->parent_id;
+        $execFId = $folder->parent_id;
+        $execFName = $folder->parent ? $folder->parent->nama : 'ROOT';
         $folderName = $folder->nama;
-        $pName = $folder->parent ? $folder->parent->nama : 'ROOT';
+
         DB::beginTransaction();
         try {
             $descendantIds = Folder::where('path', 'LIKE', $folder->path . '%')->pluck('id');
             Item::whereIn('folder_id', $descendantIds)->delete();
             Folder::whereIn('id', $descendantIds)->delete();
-            $this->logActivity(null, $pId, "({$user->name}) menghapus folder `{$folderName}` beserta semua isinya di folder [{$pName}]");
+
+            $this->logActivity(null, $execFId, "({$user->name}) menghapus folder `{$folderName}` beserta semua isinya di folder [{$execFName}]");
             DB::commit(); return redirect()->route('item.index')->with('success', "Folder dihapus.");
         } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', 'Gagal.'); }
     }

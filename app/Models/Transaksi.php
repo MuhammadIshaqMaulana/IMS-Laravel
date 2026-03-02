@@ -50,6 +50,24 @@ class Transaksi extends Model
         return '-';
     }
 
+    // AMBIL NAMA USER DARI (NAMA)
+    public function getParsedUserAttribute()
+    {
+        if (preg_match('/\(([^)]+)\)/', $this->catatan, $matches)) {
+            return $matches[1];
+        }
+        return $this->user ? $this->user->name : 'System';
+    }
+
+    // AMBIL NAMA OBJEK DARI `NAMA`
+    public function getNamaObjekAttribute()
+    {
+        if (preg_match('/`([^`]+)`/', $this->catatan, $matches)) {
+            return $matches[1];
+        }
+        return $this->itemProduksi ? $this->itemProduksi->nama : '-';
+    }
+
     // Ambil Nama Folder Asal/Eksekusi dari log [Nama Folder]
     public function getFolderAsalAttribute()
     {
@@ -68,11 +86,12 @@ class Transaksi extends Model
         return '-';
     }
 
+    // UPDATE: getParsedCatatan agar benar-benar bersih
     public function getParsedCatatanAttribute()
     {
-        // Murni teks tanpa tag HTML agar tidak pecah di PDF/View
-        // Cukup hapus simbol-simbol penanda agar enak dibaca
-        return str_replace(['`', '~', '"'], '', $this->catatan);
+        // Hilangkan simbol teknis tapi sisakan isinya
+        $text = str_replace(['~', '"', "'", '[', ']', '-', '(', ')', '`'], '', $this->catatan);
+        return $text;
     }
 
     public function itemProduksi() {

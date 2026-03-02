@@ -6,6 +6,7 @@ use App\Models\Item;
 use App\Models\Transaksi;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth; // Tambahkan ini
 
 
 class TransaksiController extends Controller
@@ -59,83 +60,60 @@ class TransaksiController extends Controller
     }
 
     /**
-     * Menyimpan transaksi produksi dan mengupdate stok (Logika Inti).
+     * [DITIMPA] store: Menambahkan log perakitan ke audit trail (transaksis)
      */
     public function store(Request $request)
     {
         $validatedData = $request->validate([
-            'item_id' => 'required|exists:items,id', // FIXED: Menggunakan item_id
+            'item_id' => 'required|exists:items,id',
             'jumlah_produksi' => 'required|integer|min:1',
             'tanggal_produksi' => 'required|date',
             'catatan' => 'nullable|string|max:500',
         ]);
 
-        $itemId = $validatedData['item_id'];
+        $user = Auth::user();
+        $produk = Item::findOrFail($validatedData['item_id']);
         $jumlahProduksi = $validatedData['jumlah_produksi'];
-
-        // Mengambil Item (BOM/Kit)
-        $produk = Item::findOrFail($itemId);
-
-        // Validasi: Pastikan item ini memang BOM (memiliki materials)
         $resepMaterials = $produk->materials;
+
         if (empty($resepMaterials) || !is_array($resepMaterials)) {
-             return redirect()->back()
-                             ->withInput()
-                             ->withErrors(['item_id' => 'Item yang dipilih bukan BOM (tidak memiliki material).']);
+             return redirect()->back()->withInput()->withErrors(['item_id' => 'Item bukan BOM.']);
         }
 
         DB::beginTransaction();
-
         try {
-            // 1. Cek Ketersediaan Stok Bahan Mentah
+            // 1. Cek Ketersediaan
             foreach ($resepMaterials as $material) {
-                $materialItemId = $material['item_id'];
-                $jumlahDibutuhkan = $material['qty'] * $jumlahProduksi;
-
-                $bahan = Item::findOrFail($materialItemId);
-
-                if ($bahan->stok_saat_ini < $jumlahDibutuhkan) {
+                $bahan = Item::findOrFail($material['item_id']);
+                $dibutuhkan = $material['qty'] * $jumlahProduksi;
+                if ($bahan->stok_saat_ini < $dibutuhkan) {
                     DB::rollBack();
-                    return redirect()->back()
-                                     ->withInput()
-                                     ->withErrors([
-                                         'jumlah_produksi' => "Stok material '{$bahan->nama}' tidak mencukupi. Dibutuhkan: {$jumlahDibutuhkan} {$bahan->satuan}, Tersedia: {$bahan->stok_saat_ini} {$bahan->satuan}."
-                                     ]);
+                    return redirect()->back()->withInput()->withErrors(['jumlah_produksi' => "Stok '{$bahan->nama}' kurang."]);
                 }
             }
 
-            // 2. Kurangi Stok Bahan Mentah
+            // 2. Kurangi Bahan
             foreach ($resepMaterials as $material) {
                 $bahan = Item::findOrFail($material['item_id']);
-                $jumlahDibutuhkan = $material['qty'] * $jumlahProduksi;
-
-                // Kurangi stok Item
-                $bahan->stok_saat_ini -= $jumlahDibutuhkan;
-                $bahan->save();
+                $bahan->decrement('stok_saat_ini', $material['qty'] * $jumlahProduksi);
             }
 
-            // 3. Tambahkan Stok Produk Jadi
-            $produk->stok_saat_ini += $jumlahProduksi;
-            $produk->save();
+            // 3. Tambahkan Produk Jadi
+            $produk->increment('stok_saat_ini', $jumlahProduksi);
 
-            // 4. Catat Transaksi
+            // 4. CATAT TRANSAKSI (AUDIT LOG)
+            // Sesuai template: (User) update stok dari item `Nama` menjadi '+Qty' di folder [Folder]
+            $execFName = $produk->folder ? $produk->folder->nama : 'ROOT';
             Transaksi::create([
-                'item_id' => $itemId, // FIXED: Menyimpan ke item_id
-                'jumlah_produksi' => $jumlahProduksi,
-                'tanggal_produksi' => $validatedData['tanggal_produksi'],
-                'catatan' => $validatedData['catatan'],
+                'user_id' => $user->id,
+                'item_id' => $produk->id,
+                'folder_id' => $produk->folder_id,
+                'catatan' => "({$user->name}) memproduksi '+$jumlahProduksi' unit item `{$produk->nama}` di folder [{$execFName}]. Ket: " . ($validatedData['catatan'] ?? '-'),
             ]);
 
             DB::commit();
-
-            return redirect()->route('transaksi.index')
-                             ->with('success', "Perakitan/Produksi {$jumlahProduksi} unit '{$produk->nama}' berhasil dicatat. Stok material sudah disesuaikan.");
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return redirect()->back()
-                             ->with('error', 'Terjadi kesalahan saat memproses transaksi: ' . $e->getMessage());
-        }
+            return redirect()->route('transaksi.index')->with('success', "Produksi berhasil.");
+        } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', $e->getMessage()); }
     }
 
     public function show() { abort(404); }
