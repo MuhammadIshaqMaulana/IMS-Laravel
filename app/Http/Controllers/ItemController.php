@@ -458,15 +458,16 @@ class ItemController extends Controller
     }
 
     /**
-     * [DITIMPA] move: Logik Move Single/Folder dengan hardcoded name
+     * [DITIMPA] move: Menangani update items_count DAN folders_count secara manual
      */
     public function move(Request $request) {
         $user = Auth::user();
         $target = ($request->target_type === 'item') ? Item::findOrFail($request->id) : Folder::findOrFail($request->id);
 
-        $oldF = $target->folder ?: ($request->target_type === 'folder' && $target->parent ? $target->parent : null);
-        $oldFName = $oldF ? $oldF->nama : 'ROOT';
+        // Identifikasi Folder Asal
+        $oldF = ($request->target_type === 'item') ? $target->folder : $target->parent;
         $oldFId = $oldF ? $oldF->id : null;
+        $oldFName = $oldF ? $oldF->nama : 'ROOT';
 
         $newFId = $request->folder_id ?: null;
         $newFObj = $request->folder_id ? Folder::find($request->folder_id) : null;
@@ -478,16 +479,23 @@ class ItemController extends Controller
         try {
             if ($request->target_type === 'item') {
                 $target->update(['folder_id' => $newFId]);
-                if ($oldFId) Folder::where('id', $oldFId)->decrement('items_count');
+                // Manual update items_count
+                if ($oldFId) Folder::where('id', $oldFId)->where('items_count', '>', 0)->decrement('items_count');
                 if ($newFId) Folder::where('id', $newFId)->increment('items_count');
+
                 $this->logActivity($target->id, $oldFId, "({$user->name}) memindahkan item/BOM `{$target->nama}` dari folder [{$oldFName}] ke folder -{$newFName}-");
             } else {
                 $target->update(['parent_id' => $newFId]);
+                // Manual update folders_count
+                if ($oldFId) Folder::where('id', $oldFId)->where('folders_count', '>', 0)->decrement('folders_count');
+                if ($newFId) Folder::where('id', $newFId)->increment('folders_count');
+
                 $target->updatePath();
                 $this->syncDescendantPaths($target);
                 $this->logActivity(null, $oldFId, "({$user->name}) memindahkan folder `{$target->nama}` dari folder [{$oldFName}] ke folder -{$newFName}-");
             }
-            DB::commit(); return redirect()->back()->with('success', 'Berhasil dipindahkan.');
+            DB::commit();
+            return redirect()->back()->with('success', 'Berhasil dipindahkan.');
         } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', $e->getMessage()); }
     }
 
@@ -701,20 +709,31 @@ class ItemController extends Controller
 
 
     /**
-     * [DITIMPA] bulkDelete: Mencatat (User) menghapus "Jumlah" item di folder [Folder]
+     * [DITIMPA] bulkDelete: Menangani pengurangan items_count secara massal
      */
     public function bulkDelete(Request $request) {
         $user = Auth::user();
         $ids = json_decode($request->selected_items, true);
+        if(empty($ids)) return redirect()->back();
+
         $firstItem = Item::find($ids[0]);
         $execFId = $firstItem ? $firstItem->folder_id : null;
         $execFName = $firstItem && $firstItem->folder ? $firstItem->folder->nama : 'ROOT';
-
-        Item::whereIn('id', $ids)->delete();
-
         $count = count($ids);
-        $this->logActivity(null, $execFId, "({$user->name}) menghapus \"{$count}\" item/BOM di folder [{$execFName}]");
-        return redirect()->back()->with('success', 'Dihapus.');
+
+        DB::beginTransaction();
+        try {
+            // Kita pakai Query Builder untuk speed (Big Data), tapi kurangi counter manual
+            Item::whereIn('id', $ids)->delete();
+
+            if ($execFId) {
+                Folder::where('id', $execFId)->where('items_count', '>=', $count)->decrement('items_count', $count);
+            }
+
+            $this->logActivity(null, $execFId, "({$user->name}) menghapus \"{$count}\" item/BOM di folder [{$execFName}]");
+            DB::commit();
+            return redirect()->back()->with('success', 'Dihapus.');
+        } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', 'Gagal hapus massal.'); }
     }
 
     // --- HELPERS ---
@@ -836,22 +855,30 @@ class ItemController extends Controller
     }
 
     /**
-     * [DITIMPA] destroyFolder: Delete folder
+     * [DITIMPA] destroyFolder: Menangani pengurangan folders_count di parent
      */
     public function destroyFolder(Folder $folder) {
         $user = Auth::user();
-        $execFId = $folder->parent_id;
-        $execFName = $folder->parent ? $folder->parent->nama : 'ROOT';
+        $pId = $folder->parent_id;
         $folderName = $folder->nama;
+        $pName = $folder->parent ? $folder->parent->nama : 'ROOT';
 
         DB::beginTransaction();
         try {
             $descendantIds = Folder::where('path', 'LIKE', $folder->path . '%')->pluck('id');
+
+            // Hapus isi
             Item::whereIn('folder_id', $descendantIds)->delete();
             Folder::whereIn('id', $descendantIds)->delete();
 
-            $this->logActivity(null, $execFId, "({$user->name}) menghapus folder `{$folderName}` beserta semua isinya di folder [{$execFName}]");
-            DB::commit(); return redirect()->route('item.index')->with('success', "Folder dihapus.");
+            // Manual decrement folders_count untuk parent-nya saja
+            if ($pId) {
+                Folder::where('id', $pId)->where('folders_count', '>', 0)->decrement('folders_count');
+            }
+
+            $this->logActivity(null, $pId, "({$user->name}) menghapus folder `{$folderName}` beserta semua isinya di folder [{$pName}]");
+            DB::commit();
+            return redirect()->route('item.index')->with('success', "Folder dihapus.");
         } catch (\Exception $e) { DB::rollBack(); return redirect()->back()->with('error', 'Gagal.'); }
     }
 }

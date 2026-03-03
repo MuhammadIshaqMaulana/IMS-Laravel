@@ -94,7 +94,7 @@
                     <div class="card-body p-3 text-center">
                         <h6 class="card-title text-truncate fw-bold mb-1">{{ $folder->nama }}</h6>
                         <div class="d-flex justify-content-center gap-2">
-                            <span class="badge bg-light text-muted border fw-normal">{{ $folder->children_count }} Folder</span>
+                            <span class="badge bg-light text-muted border fw-normal">{{ $folder->folders_count }} Folder</span>
                             <span class="badge bg-light text-muted border fw-normal">{{ $folder->items_count }} Item</span>
                         </div>
                     </div>

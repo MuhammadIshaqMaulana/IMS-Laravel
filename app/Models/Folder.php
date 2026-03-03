@@ -10,7 +10,7 @@ class Folder extends Model
 {
     use HasFactory, SoftDeletes; // Tambahkan SoftDeletes di sini
 
-    protected $fillable = ['nama', 'parent_id', 'path'];
+    protected $fillable = ['nama', 'parent_id', 'path', 'folders_count', 'items_count'];
 
     // Relasi ke folder induk
     public function parent() {
@@ -26,6 +26,8 @@ class Folder extends Model
     public function items() {
         return $this->hasMany(Item::class);
     }
+
+
 
     /**
      * Mengambil silsilah folder untuk breadcrumbs.
@@ -59,17 +61,26 @@ class Folder extends Model
 
     protected static function booted()
     {
+        // 1. Saat Sub-Folder Baru Dibuat
         static::created(function ($folder) {
             if ($folder->parent_id) {
-                \App\Models\Folder::where('id', $folder->parent_id)->increment('children_count');
+                Folder::where('id', $folder->parent_id)->increment('folders_count');
             }
         });
 
+        // 2. Saat Sub-Folder Dihapus (Soft Delete)
         static::deleted(function ($folder) {
             if ($folder->parent_id) {
-                \App\Models\Folder::where('id', $folder->parent_id)
-                    ->where('children_count', '>', 0)
-                    ->decrement('children_count');
+                Folder::where('id', $folder->parent_id)
+                    ->where('folders_count', '>', 0)
+                    ->decrement('folders_count');
+            }
+        });
+
+        // 3. Saat Sub-Folder Dikembalikan (Restore)
+        static::restored(function ($folder) {
+            if ($folder->parent_id) {
+                Folder::where('id', $folder->parent_id)->increment('folders_count');
             }
         });
     }
