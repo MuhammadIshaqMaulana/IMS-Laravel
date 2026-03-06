@@ -16,7 +16,7 @@
     <table>
         <thead>
             <tr>
-                <th style="width: 30px;">image</th>
+                {{-- <th style="width: 30px;">image</th> --}}
                 <th style="width: 25px;">nomor</th>
                 <th>nama</th>
                 <th style="width: 35px;">satuan</th>
@@ -32,9 +32,9 @@
         <tbody>
             @foreach($items as $item)
             <tr>
-                <td style="text-align: center;">
+                {{-- <td style="text-align: center;">
                     @if($item->image_link) <img src="{{ $item->image_link }}" class="img-preview"> @else - @endif
-                </td>
+                </td> --}}
                 <td>{{ $loop->iteration }}</td>
                 <td><strong>{{ $item->nama }}</strong><br><span style="color:#888;">{{ $item->sku }}</span></td>
                 <td>{{ $item->satuan }}</td>

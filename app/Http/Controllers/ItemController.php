@@ -91,7 +91,7 @@ class ItemController extends Controller
     }
 
     /**
-     * [DITIMPA] Store: Menggunakan template (User) membuat item `Nama` di folder [Folder]
+     * [DITIMPA] store: Memperbaiki bug stok saat ini pada pembuatan Multi-Varian
      */
     public function store(Request $request)
     {
@@ -113,7 +113,6 @@ class ItemController extends Controller
             if ($request->type === 'folder') {
                 $folder = Folder::create(['nama' => $request->nama, 'parent_id' => $request->folder_id]);
                 $folder->updatePath();
-                // LOG: Create Folder
                 $this->logActivity(null, $request->folder_id, "({$userName}) membuat folder `{$folder->nama}` di folder [{$execFolderName}]");
             } else {
                 $decodedMaterials = json_decode($request->materials_data, true);
@@ -121,12 +120,16 @@ class ItemController extends Controller
                 $variants = json_decode($request->variant_dimensions, true);
                 $tagsArr = array_filter(array_map('trim', explode(',', $request->tags_input ?? ''))) ?: null;
 
+                // Tentukan stok awal (Jika BOM maka 0, jika Item biasa maka sesuai input)
+                $initialStock = ($finalMaterials) ? 0 : ($request->stok_saat_ini ?? 0);
+
                 if (empty($variants)) {
+                    // Create Single
                     $item = Item::create([
                         'nama' => $request->nama,
                         'sku' => ($finalMaterials) ? 'BOM-' . strtoupper(Str::random(6)) : $this->generateUniqueSku($request->nama),
                         'satuan' => $request->satuan,
-                        'stok_saat_ini' => ($finalMaterials) ? 0 : ($request->stok_saat_ini ?? 0),
+                        'stok_saat_ini' => $initialStock,
                         'stok_minimum' => $request->stok_minimum ?? 0,
                         'harga_jual' => $request->harga_jual ?? 0,
                         'harga_beli' => $request->harga_beli ?? 0,
@@ -135,9 +138,9 @@ class ItemController extends Controller
                         'note' => $request->note,
                         'tags' => $tagsArr,
                     ]);
-                    // LOG: Create Single Item/BOM
                     $this->logActivity($item->id, $request->folder_id, "({$userName}) membuat item/BOM `{$item->nama}` di folder [{$execFolderName}]");
                 } else {
+                    // Create Multi Varian
                     $combinations = $this->generateCombinations($variants);
                     foreach ($combinations as $combo) {
                         $vName = $request->nama . ' - ' . implode(', ', $combo);
@@ -147,7 +150,7 @@ class ItemController extends Controller
                             'nama' => $vName,
                             'sku' => $this->generateUniqueSku($vName),
                             'satuan' => $request->satuan ?? 'pcs',
-                            'stok_saat_ini' => 0,
+                            'stok_saat_ini' => $initialStock, // SEKARANG SUDAH DINAMIS
                             'stok_minimum' => $request->stok_minimum ?? 0,
                             'harga_jual' => $request->harga_jual ?? 0,
                             'harga_beli' => $request->harga_beli ?? 0,
@@ -158,7 +161,6 @@ class ItemController extends Controller
                         ]);
                     }
                     $countV = count($combinations);
-                    // LOG: Create Multi-varian
                     $this->logActivity(null, $request->folder_id, "({$userName}) membuat item/BOM dengan \"{$countV}\" varian di folder [{$execFolderName}]");
                 }
             }
@@ -760,23 +762,25 @@ class ItemController extends Controller
 
 
     /**
-     * [DITIMPA] Helper Variants: Menerima $materials yang sudah jadi array/null
+     * [DITIMPA] generateVariantsWithMaterials: Helper ini juga diperbaiki stoknya (jika loe pakai ini)
      */
     private function generateVariantsWithMaterials($request, $dimensions, $folderId, $materials)
     {
         $combinations = $this->generateCombinations($dimensions);
+        $initialStock = ($materials) ? 0 : ($request->stok_saat_ini ?? 0);
+
         foreach ($combinations as $combo) {
             $name = $request->nama . ' - ' . implode(', ', $combo);
             Item::create([
                 'nama' => $name,
                 'sku' => $this->generateUniqueSku($name),
                 'satuan' => $request->satuan ?? 'pcs',
-                'stok_saat_ini' => 0,
+                'stok_saat_ini' => $initialStock, // FIX
                 'stok_minimum' => $request->stok_minimum ?? 0,
                 'harga_jual' => floor($request->harga_jual ?? 0),
                 'harga_beli' => floor($request->harga_beli ?? 0),
                 'folder_id' => $folderId,
-                'materials' => $materials, // Array atau NULL
+                'materials' => $materials,
                 'note' => "Varian dari " . $request->nama,
                 'tags' => array_filter(array_map('trim', explode(',', $request->tags_input ?? ''))) ?: null,
             ]);

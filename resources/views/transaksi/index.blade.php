@@ -27,7 +27,7 @@
                         <option value="{{ request()->fullUrlWithQuery(['order' => 'desc']) }}" {{ request('order', 'desc') == 'desc' ? 'selected' : '' }}>Descending</option>
                     </select>
                 </div>
-                <a href="{{ route('transaksi.create') }}" class="btn btn-success btn-sm fw-bold px-3">+ Produksi</a>
+                {{-- <a href="{{ route('transaksi.create') }}" class="btn btn-success btn-sm fw-bold px-3">+ Produksi</a> --}}
             </div>
         </div>
 
