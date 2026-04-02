@@ -684,7 +684,8 @@ class ItemController extends Controller
                 'harga_beli_value' => 'harga beli',
                 'harga_jual_value' => 'harga jual',
                 'satuan_value' => 'satuan',
-                'note_value' => 'note'
+                'note_value' => 'note',
+                'stok_minimum'  => 'stok_minimum'
             ];
             foreach($map as $reqKey => $dbLabel) {
                 if($request->filled($reqKey)) {

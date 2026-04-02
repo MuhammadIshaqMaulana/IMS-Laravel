@@ -86,7 +86,7 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-bold small">Stok Minimum:</label>
-                            <input type="number" name="min_level_value" class="form-control" placeholder="Biarkan kosong">
+                            <input type="number" name="stok_minimum" class="form-control" placeholder="Biarkan kosong">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-bold small">Satuan:</label>
