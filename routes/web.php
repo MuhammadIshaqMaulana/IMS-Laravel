@@ -1,48 +1,42 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\BahanMentahController;
-use App\Http\Controllers\ProdukJadiController;
-use App\Http\Controllers\DaftarBahanController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ItemController;
 use App\Http\Controllers\TransaksiController;
+use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\ApiPythonController;
-use App\Http\Controllers\GoogleAuthController; // Impor GoogleAuthController
-use App\Http\Controllers\LaporanController; // Impor LaporanController
+use App\Http\Controllers\GoogleAuthController;
 
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-*/
+Route::get('/', function () { return view('welcome'); })->name('home');
 
-// Rute Dasar (Halaman Awal - Welcome)
-Route::get('/', function () {
-    return view('welcome');
-})->name('home');
+Route::get('login', function () {
+    return redirect()->route('home')->with('error', 'Silakan Login terlebih dahulu.');
+})->name('login');
 
-// --- Rute Autentikasi (Akses Publik) ---
 Route::get('auth/google', [GoogleAuthController::class, 'redirectToGoogle'])->name('login.google');
 Route::get('auth/google/callback', [GoogleAuthController::class, 'handleGoogleCallback']);
 Route::post('logout', [GoogleAuthController::class, 'logout'])->name('logout');
 
-// FIX: Tambahkan rute 'login' yang disyaratkan oleh middleware 'auth' untuk menghindari RouteNotFoundException
-// Rute ini mengalihkan pengguna kembali ke halaman utama (home) untuk login via Google.
-Route::get('login', function () {
-    return redirect()->route('home')->with('error', 'Silakan Login untuk mengakses halaman ini.');
-})->name('login');
-
-
-// --- Rute IMS Inti (Dilindungi Middleware 'auth') ---
 Route::middleware(['auth'])->group(function () {
-    Route::resource('bahan-mentah', BahanMentahController::class);
-    Route::resource('produk-jadi', ProdukJadiController::class);
-    Route::resource('daftar-bahan', DaftarBahanController::class);
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/item/search-ajax', [ItemController::class, 'searchAjax'])->name('item.search.ajax');
+
+    // Item & Inventory Routes
+    Route::get('item/export/csv', [ItemController::class, 'exportCsv'])->name('item.export.csv');
+    Route::get('item/export/pdf', [ItemController::class, 'exportPdf'])->name('item.export.pdf');
+    Route::post('item/import', [ItemController::class, 'importCsv'])->name('item.import'); // RUTE BARU
+    Route::post('item/bulk-update', [ItemController::class, 'bulkUpdate'])->name('item.bulk-update');
+    Route::post('item/bulk-clone', [ItemController::class, 'bulkClone'])->name('item.bulk-clone');
+    Route::post('item/bulk-update-quantity', [ItemController::class, 'bulkUpdateQuantity'])->name('item.bulk-update-quantity');
+    Route::delete('/item/bulk-delete', [ItemController::class, 'bulkDelete'])->name('item.bulk-delete');
+
+    Route::resource('item', ItemController::class);
+    Route::post('item/{item}/update-quantity', [ItemController::class, 'updateQuantity'])->name('item.update-quantity');
+    Route::post('inventory/move', [ItemController::class, 'move'])->name('item.move');
+    Route::put('/folder/{folder}/update', [ItemController::class, 'updateFolder'])->name('folder.update');
+    Route::delete('/folder/{folder}/delete', [ItemController::class, 'destroyFolder'])->name('folder.destroy');
+
     Route::resource('transaksi', TransaksiController::class);
-
-// --- Modul Laporan (BARU) ---
     Route::get('laporan/stok-minimum', [LaporanController::class, 'stokMinimum'])->name('laporan.stok-minimum');
-
-    // Rute API Python (masuk ke dalam grup auth)
-    Route::get('uji-api', [ApiPythonController::class, 'index'])->name('api-python.index');
-    Route::post('uji-api/validasi-sku', [ApiPythonController::class, 'validasiSku'])->name('api-python.validasi-sku');
 });

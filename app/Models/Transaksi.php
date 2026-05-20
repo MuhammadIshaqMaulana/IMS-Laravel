@@ -4,30 +4,97 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Transaksi extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
-    // Model Transaksi akan merujuk ke tabel 'transaksis'
     protected $table = 'transaksis';
+    protected $fillable = ['user_id', 'item_id', 'folder_id', 'catatan'];
 
-    protected $fillable = [
-        'produk_jadi_id',
-        'jumlah_produksi',
-        'tanggal_produksi',
-        'catatan',
-    ];
+    // Relasi ke User (Pelaku)
+    public function user() {
+        return $this->belongsTo(User::class, 'user_id');
+    }
 
-    protected $casts = [
-        'tanggal_produksi' => 'datetime',
-    ];
-
-    /**
-     * Relasi: Transaksi ini dibuat untuk satu Produk Jadi.
-     */
-    public function produkJadi(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    public function getTipeAksiAttribute()
     {
-        return $this->belongsTo(ProdukJadi::class, 'produk_jadi_id');
+        $c = $this->catatan;
+        if (str_contains($c, 'memindahkan')) return 'Move';
+        if (str_contains($c, 'menghapus')) return 'Delete';
+        if (str_contains($c, 'membuat')) return 'Create';
+        if (str_contains($c, 'clone')) return 'Create';
+        if (str_contains($c, 'mengimport')) return 'Import';
+        if (str_contains($c, 'update stok')) return 'Update Stok';
+        if (str_contains($c, 'update material')) return 'Update BOM';
+        if (str_contains($c, 'update')) return 'Update';
+        return 'Lainnya';
+    }
+
+    public function getPerubahanStokAttribute()
+    {
+        // Mencari nilai di dalam ''
+        preg_match("/'([^']+)'/", $this->catatan, $matches);
+        return $matches[1] ?? '-';
+    }
+
+    public function getTargetCountAttribute()
+    {
+        // 1. Jika ada simbol "" (Bulk), ambil angkanya
+        if (preg_match('/"([^"]+)"/', $this->catatan, $matches)) return $matches[1];
+
+        // 2. Jika ada simbol `` (Single), otomatis targetnya 1
+        if (preg_match('/`([^`]+)`/', $this->catatan)) return 1;
+
+        return '-';
+    }
+
+    // AMBIL NAMA USER DARI (NAMA)
+    public function getParsedUserAttribute()
+    {
+        if (preg_match('/\(([^)]+)\)/', $this->catatan, $matches)) {
+            return $matches[1];
+        }
+        return $this->user ? $this->user->name : 'System';
+    }
+
+    // AMBIL NAMA OBJEK DARI `NAMA`
+    public function getNamaObjekAttribute()
+    {
+        if (preg_match('/`([^`]+)`/', $this->catatan, $matches)) {
+            return $matches[1];
+        }
+        return $this->itemProduksi ? $this->itemProduksi->nama : '-';
+    }
+
+    // Ambil Nama Folder Asal/Eksekusi dari log [Nama Folder]
+    public function getFolderAsalAttribute()
+    {
+        if (preg_match('/\[([^\]]+)\]/', $this->catatan, $matches)) {
+            return $matches[1];
+        }
+        return '-';
+    }
+
+    // Ambil Nama Folder Tujuan dari log -Nama Folder-
+    public function getFolderTujuanAttribute()
+    {
+        if (preg_match('/-([^-]+)-/', $this->catatan, $matches)) {
+            return $matches[1];
+        }
+        return '-';
+    }
+
+    // UPDATE: getParsedCatatan agar benar-benar bersih
+    public function getParsedCatatanAttribute()
+    {
+        // Hilangkan simbol teknis tapi sisakan isinya
+        $text = str_replace(['~', '"', "'", '[', ']', '-', '(', ')', '`'], '', $this->catatan);
+        return $text;
+    }
+
+    public function itemProduksi() {
+        return $this->belongsTo(Item::class, 'item_id');
     }
 }

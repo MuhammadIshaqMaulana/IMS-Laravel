@@ -1,7 +1,7 @@
 Google OpenAuth = laravel socialite default package
 
-
-
+Catatan Penting: Untuk menjalankan $table->change(), loe mungkin butuh package pendukung jika belum ada. Jalankan composer require doctrine/dbal jika muncul error saat migrate. Setelah itu, jalankan php artisan migrate.
+- Kalo mau buka
 
 
 
@@ -93,7 +93,7 @@ Cara ctrl click laravel
 https://stackoverflow.com/questions/55702015/trying-to-go-to-a-file-inside-code-by-clicking-in-laravel-vs-code
 
 
-rollback: 
+rollback:
 php artisan migrate:rollback --step=1
 
 

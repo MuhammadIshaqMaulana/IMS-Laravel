@@ -3,133 +3,176 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IMS Roti | @yield('title', 'Manajemen Inventaris')</title>
-    <!-- Bootstrap CSS CDN -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" xintegrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-    <!-- Font Awesome (untuk ikon) -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLMDJ8Wn1s5v5k8X/K3+g6T2P1d5o3m2yS2G0u5T5z5M5i5t5j5g5L5O5g5g5w5j5s5k5i5m5l5n5o5p5q5r5s5t5u5v5w5x5y5z5A5B5C5D5E5F5G5H5I5J5K5L5M5N5O5P5Q5R5S5T5U5V5W5X5Y5Z" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <!-- Custom Style Sederhana -->
+    <title>My IMS | @yield('title')</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <style>
-        body {
-            background-color: #f8f9fa;
+        html, body { height: 100%; overflow: hidden; margin: 0; background-color: #fff; }
+        #app-wrapper { display: flex; height: 100vh; width: 100vw; }
+
+        /* 1. Main Icon Nav (Fixed) */
+        #main-nav {
+            width: 80px;
+            background: #4a2c16;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 0;
+            z-index: 1000;
         }
-        .navbar {
-            background-color: #e3f2fd; /* Warna biru muda khas toko roti */
-            box-shadow: 0 2px 4px rgba(0,0,0,.05);
+        #main-nav .nav-link { color: rgba(255,255,255,0.6); font-size: 1.4rem; margin-bottom: 30px; transition: 0.2s; }
+        #main-nav .nav-link:hover, #main-nav .nav-link.active { color: white; transform: scale(1.1); }
+
+        /* 2. Folder Sidebar (Resizable) */
+        #folder-sidebar {
+            width: 260px;
+            min-width: 150px;
+            max-width: 600px;
+            background: #fcfcfc;
+            border-right: 1px solid #eee;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
         }
-        .card {
-            border-radius: 0.75rem;
-            box-shadow: 0 4px 6px rgba(0,0,0,.1);
+        .sidebar-header { padding: 20px; border-bottom: 1px solid #f0f0f0; }
+        .folder-tree { flex-grow: 1; overflow-y: auto; padding: 10px; }
+        .folder-item {
+            display: block;
+            padding: 8px 12px;
+            color: #444;
+            text-decoration: none;
+            border-radius: 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 0.9rem;
+            transition: background 0.2s;
         }
+        .folder-item:hover { background: #f0f0f0; color: #895129; }
+        .folder-item.active { background: #fdf5ef; color: #895129; font-weight: bold; }
+
+        /* 3. Resizer */
+        #resizer {
+            width: 4px;
+            cursor: col-resize;
+            background: transparent;
+            transition: background 0.3s;
+            flex-shrink: 0;
+        }
+        #resizer:hover, #resizer.resizing { background: #895129; }
+
+        /* 4. Content Area */
+        #content-area {
+            flex-grow: 1;
+            overflow-y: auto;
+            background: #fff;
+            padding: 25px;
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #ddd; border-radius: 10px; }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg">
-        <div class="container-fluid">
-            <a class="navbar-brand fw-bold" href="{{ url('/') }}">
-                🥖 IMS Toko Roti
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                @auth
-                <ul class="navbar-nav me-auto">
+    <div id="app-wrapper">
+        @auth
+        <nav id="main-nav">
+            <a href="{{ route('dashboard') }}" class="nav-link {{ Route::is('dashboard') ? 'active' : '' }}" title="Dashboard"><i class="fas fa-home"></i></a>
+            <a href="{{ route('item.index') }}" class="nav-link {{ Route::is('item.*') ? 'active' : '' }}" title="Inventory"><i class="fas fa-boxes"></i></a>
+            <a href="{{ route('transaksi.index') }}" class="nav-link {{ Route::is('transaksi.*') ? 'active' : '' }}" title="History"><i class="fas fa-history"></i></a>
+            <a href="{{ route('laporan.stok-minimum') }}" class="nav-link" title="Alerts"><i class="fas fa-bell"></i></a>
 
-                    <!-- Navigasi Bahan Mentah -->
-                    <li class="nav-item">
-                        <a class="nav-link {{ Route::currentRouteName() == 'bahan-mentah.index' ? 'active fw-bold' : '' }}"
-                           href="{{ route('bahan-mentah.index') }}">
-                           <i class="fas fa-wheat-awn me-1"></i> Bahan Mentah
-                        </a>
-                    </li>
+            <div class="mt-auto">
+                <form action="{{ route('logout') }}" method="POST">@csrf
+                    <button type="submit" class="btn btn-link nav-link"><i class="fas fa-sign-out-alt"></i></button>
+                </form>
+            </div>
+        </nav>
 
-                    <!-- Navigasi Produk Jadi -->
-                    <li class="nav-item">
-                        <a class="nav-link {{ Route::currentRouteName() == 'produk-jadi.index' ? 'active fw-bold' : '' }}"
-                           href="{{ route('produk-jadi.index') }}">
-                           <i class="fas fa-bread-slice me-1"></i> Produk Jadi
-                        </a>
-                    </li>
+        <div id="folder-sidebar">
+            <div class="sidebar-header d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold m-0 text-muted small">NAVIGASI FOLDER</h6>
+                <a href="{{ route('item.index') }}" class="btn btn-link btn-sm p-0 text-dark" title="Refresh Tree"><i class="fas fa-sync-alt fa-xs"></i></a>
+            </div>
+            <div class="folder-tree">
+                <a href="{{ route('item.index') }}" class="folder-item {{ !request('folder_id') ? 'active' : '' }}">
+                    <i class="fas fa-hdd me-2 opacity-50"></i> Semua Item (Root)
+                </a>
 
-                    <!-- Navigasi Daftar Bahan/Resep -->
-                    <li class="nav-item">
-                        <a class="nav-link {{ Route::currentRouteName() == 'daftar-bahan.index' ? 'active fw-bold' : '' }}"
-                           href="{{ route('daftar-bahan.index') }}">
-                           <i class="fas fa-receipt me-1"></i> Resep (BOM)
-                        </a>
-                    </li>
+                <hr class="my-2 mx-3 opacity-10">
 
-                    <!-- Navigasi Transaksi (Produksi) -->
-                    <li class="nav-item">
-                        <a class="nav-link {{ Route::currentRouteName() == 'transaksi.index' ? 'active fw-bold' : '' }}"
-                           href="{{ route('transaksi.index') }}">
-                           <i class="fas fa-cogs me-1"></i> Transaksi
-                        </a>
-                    </li>
+                @php
+                    // FIX: Ambil data folder langsung di sini jika tidak disediakan oleh controller
+                    $sidebarFolders = \App\Models\Folder::orderBy('nama')->get();
 
-                    <!-- Navigasi Laporan Stok Minimum (BARU) -->
-                     <li class="nav-item">
-                        <a class="nav-link {{ Route::currentRouteName() == 'laporan.stok-minimum' ? 'active fw-bold' : '' }}"
-                           href="{{ route('laporan.stok-minimum') }}">
-                           <i class="fas fa-bell me-1 text-danger"></i> Stok Kritis
-                        </a>
-                    </li>
+                    $renderTree = function($folders, $parentId = null, $level = 0) use (&$renderTree) {
+                        $currentFolders = $folders->where('parent_id', $parentId);
+                        foreach ($currentFolders as $f) {
+                            $activeClass = request('folder_id') == $f->id ? 'active' : '';
+                            $padding = $level * 15 + 12;
 
-                    <!-- Navigasi API Python -->
-                     <li class="nav-item">
-                        <a class="nav-link {{ Route::currentRouteName() == 'api-python.index' ? 'active fw-bold' : '' }}"
-                           href="{{ route('api-python.index') }}">
-                           <i class="fas fa-terminal me-1"></i> Uji API Python
-                        </a>
-                    </li>
-                </ul>
+                            echo "<a href='".route('item.index', ['folder_id' => $f->id])."'
+                                     class='folder-item {$activeClass}'
+                                     style='padding-left: {$padding}px;'
+                                     title='{$f->nama}'>";
+                            echo "<i class='fas fa-folder me-2 ".($activeClass ? 'text-white' : 'text-warning')." opacity-75'></i>";
+                            echo "<span>{$f->nama}</span>";
+                            echo "</a>";
 
-                <!-- Tombol Logout -->
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="fas fa-user-circle me-1"></i> {{ Auth::user()->name }}
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-                            <li>
-                                <form action="{{ route('logout') }}" method="POST">
-                                    @csrf
-                                    <button type="submit" class="dropdown-item">
-                                        <i class="fas fa-sign-out-alt me-1"></i> Logout
-                                    </button>
-                                </form>
-                            </li>
-                        </ul>
-                    </li>
-                </ul>
-                @endauth
+                            $renderTree($folders, $f->id, $level + 1);
+                        }
+                    };
+                @endphp
+
+                {!! $renderTree($sidebarFolders, null) !!}
             </div>
         </div>
-    </nav>
+        <div id="resizer"></div>
+        @endauth
 
-    <main class="py-4">
-        <div class="container">
-            <!-- Pesan Sukses/Error Global -->
+        <main id="content-area">
             @if(session('success'))
-                <div class="alert alert-success alert-dismissible fade show" role="alert">
-                    {{ session('success') }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                <div class="alert alert-success border-0 shadow-sm alert-dismissible fade show">
+                    <i class="fas fa-check-circle me-2"></i> {{ session('success') }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             @endif
-             @if(session('error'))
-                <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                    {{ session('error') }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            @if(session('error'))
+                <div class="alert alert-danger border-0 shadow-sm alert-dismissible fade show">
+                    <i class="fas fa-exclamation-circle me-2"></i> {{ session('error') }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             @endif
-
-            <!-- Konten halaman spesifik akan dimuat di sini -->
             @yield('content')
-        </div>
-    </main>
+        </main>
+    </div>
 
-    <!-- Bootstrap JS CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" xintegrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const sidebar = document.getElementById('folder-sidebar');
+        const resizer = document.getElementById('resizer');
+        let isResizing = false;
+
+        resizer?.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            resizer.classList.add('resizing');
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            const newWidth = e.clientX - 80;
+            if (newWidth > 150 && newWidth < 600) {
+                sidebar.style.width = `${newWidth}px`;
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            isResizing = false;
+            resizer?.classList.remove('resizing');
+        });
+    </script>
 </body>
 </html>

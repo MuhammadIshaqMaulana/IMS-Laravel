@@ -21,6 +21,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'google_id', // TAMBAHKAN INI
+        'is_admin',  // TAMBAHKAN INI
     ];
 
     /**
@@ -43,6 +45,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_admin' => 'boolean', // TAMBAHKAN INI JUGA BIAR LEBIH AMAN
         ];
     }
 }

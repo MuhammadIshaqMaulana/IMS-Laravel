@@ -1,3 +1,13 @@
+A. ini rule pas loe ngasih kode:
+- cukup kasih gue fungsi/section yang dibutuhkan
+- pastikan loe tetap memberi comment mana fungsi/section baru dan mana fungsi lama yang perlu di timpa. Tanpa itu gue bakal mencari-cari fungsi lamanya untuk ditimpa padahal itu adalah fungsi baru
+- kasih tahu gue juga jika ada fungsi yang harus dihapus
+- pastikan juga fungsi/section yang loe berikan itu lengkap, jangan setengah-setengah, karena gue ketika lihat fungsi/section, gue langsung copy paste tanpa lihat detail isinya.
+- pastikan juga nama fungsi/id section itu nggak loe ubah sembarangan, biar gue lebih mudah mencarinya. 
+
+
+
+
 AUTHENTIKASI
 1. saya coba akses melalui link http://127.0.0.1:8000/, page terbuka seperti biasa dengan kondisi saya belum login. Saya coba login menggunakan akun google yang terdaftar, lalu login gagal dan kena redirect ke localhost:8000 dengan kondisi masih belum login. Saya coba login dari localhost menggunakan akun google yang terdaftar, dan berhasil. Namun, ketika saya mengakses 127, page tersebut masih dalam kondisi belum login, saya kembali ke localhost dan saya masih dalam kondisi login. Jadi menurut saya localhost dan 127 walaupun mengakses base code sama, tapi loginnya beda. Lagian, Authorized JavaScript origins = http://localhost:8000 dan Authorized redirect URIs = http://localhost:8000/auth/google/callback. Jadi menurut saya, akan lebih baik ketika user berusaha mengakses 127, apapun itu subpage nya, redirect ke localhost. Lagian login dari 127 juga gak bisa.
 
@@ -8,4 +18,102 @@ Solusi terbaik adalah menghapus sintaks yang menyebabkan fatal error dari bootst
 3. Aku tidak perlu memasukkan user di google console agar dia bisa login. Semua akun google bisa login disitu. Pada aplikasi ini sekarang, cara dia menentukan orang itu admin atau bukan adalah dengan melihat di .env ADMIN_EMAILS=lanakeren20@gmail.com
 
 UI FRONT END
-4. 
+4. bro, coba jelasin dong gimana cara sistem folder dalam aplikasi kita bekerja
+
+Terus aku mau ngasih tau, kalo misal kita punya folder :
+
+- A
+-- B
+--- B1
+-- C
+--- C1
+
+Gue pindahkan A ke C1, dan itu berhasil, yang seharusnya gak berhasil.
+
+- Nama folder juga gak boleh sama pada level yang sama.
+Gue ingin loe jangan ngoding dulu, coba fokus jelasin bagaimana solusi cara kerja terbaik untuk sistem folder ini.
+
+5. AKAR MASALAH = data Folder masih di dalam Item dan hanya mengandalkan tags 'folder'. Ini membuat user bisa input item dan menambahkan tag folder sehingga item tersebut malah menjadi folder yang seharusnya prohibited. 
+Sedari awal, tabel Item itu untuk Item dan BOM, bukan buat folder.  Gue mau Tags digunakan sebagai keterangan tambahan Item/Bom tersebut, bukan sebagai identitas folder. Gue juga ga mau ada folder_id dan folder_parent dalam tabel Items, toh itu bukan tabel buat folder. Gue juga heran buat apa itu parent_id? Selama gue bikin folder, gak pernah berisi itu kolom. Buat kolom path dalam tabel item, mungkin masih bisa kita pake buat simpan path item/BOM, toh aku juga heran gimana loe ngesih alamat path pada item/BOM yang dimasukkan ke folder padahal sebelumnya belum ada kolom path/kolom pathnya null.
+
+
+6. gue tes import 60k data dumX. berhasil, folder dumX berisi 60k data. Tapi counter item dan folder di card dumX masih 0. Gue tambah data manual 1, counter item bbertambah jadi 1. Seharusnya 60001 karena ada 60k item lain di situ. Gue coba bikin folder sendiri dalam dumX, counter folder gak bertambah
+
+7. - kalau emang gak bisa render 900k data dengan cepat, yaudah kita kembali ke endless scroll aja, tapi gue tetep mau user punya utilitas penuh untuk select seluruh data ataupun select data spesifi. Menurut gue solusinya, setelah terinspirasi sistem query sql, adalah dengan menyediakan tombol khusus buat select all item in folder walaupun data tersebut tidak dirender, fitur filter advance + select all filtered item + indikator berapa jumlah data hasil filter..
+
+8. - kalau emang gak bisa render 900k data dengan cepat, yaudah kita kembali ke endless scroll aja, tapi gue tetep mau user punya utilitas penuh untuk select seluruh data ataupun select data spesifi. Menurut gue solusinya, setelah terinspirasi sistem query sql, adalah dengan menyediakan tombol khusus buat select all item in folder walaupun data tersebut tidak dirender, fitur filter advance + select all filtered item + indikator berapa jumlah data hasil filter..
+
+9. - oke bro global selectionnya udah berfungsi.
+
+- gue mau fitur sort by name, created at, updated at, stok, stok min, harga beli, harga jual .ascend & descend
+
+- gue ingin item show.blade.php menampilkan juga tanggal created at & updated at
+
+- gue mau endless scroll seamless, kayaknya naikkan rendernya jadi sekitar 25 item, terus sebelum user sampai ke ujung render, sistem udah render data lagi.
+
+10. - fitur ascending descending masih belum loe terapkan dengan maksimal, hanya nama yang bisa acending descending. Gue mau isi dropdown sort bagian nama cukup dibuat 1 saja, lalu loe buatkan dropdown 1 lagi untuk memilih ascending atau descending agar name, created at, updated at, stok, stok min, harga beli, dan harga jual bisa disort secara ascending atau descending. Gak usah pake icon.
+
+- bro, sejauh ini fitur aplikasi udah cukup bagus. Sekarang ayo kita fokus upgrade Pencatatan transaksi recent activity. Seperti catat kejadian import, nama file, dan jumlah datanya. catat setiap CRUD yang terjadi. Catat juga bulk CRUD dengan format jumah data yang dibulk CRUD, jika itu update, fitur apa yang diupdate dan valuenya, dan lokasi folder kejadiannya. Catat juga perpindahan items atau folder dari mana ke mana.
+
+- sediakan tombol bulk delete di sebelah edit data ketika user select items, kembalikan juga tombol clone data yang hilang.
+
+
+11. - gue coba bulk move folder & clone items error bro:
+Illuminate\Database\QueryException
+vendor\laravel\framework\src\Illuminate\Database\Connection.php:824
+SQLSTATE[23000]: Integrity constraint violation: 1048 Column 'item_id' cannot be null (Connection: mysql, SQL: insert into `transaksis` (`item_id`, `jumlah_produksi`, `tanggal_produksi`, `catatan`, `updated_at`, `created_at`) values (?, 3, 2026-01-30 03:33:50, Bulk Update Satuan/Note pada 3 item., 2026-01-30 03:33:50, 2026-01-30 03:33:50))
+
+LARAVEL
+12.40.2
+PHP
+8.2.12
+UNHANDLED
+CODE 23000
+500
+POST
+http://ims-inventory.com/item/bulk-update
+
+Exception trace
+15 vendor frames
+
+App\Http\Controllers\ItemController->logActivity(null, integer, string)
+app\Http\Controllers\ItemController.php:391
+
+386
+387    /**
+388     * [BARU/DITIMPA] Helper Log: Simpan ke tabel transaksis
+389     */
+390    private function logActivity($itemId, $qty, $note) {
+391        Transaksi::create([
+
+- Gue coba import 900k data, gagal dengan pesan merah:  Undefined variable $staging
+
+- tombol yang ada di card folder yaitu move, rename, dan delete folder hilang bro
+
+
+12. - sistem pencarian yang kita punya sekarang itu hanya mencari secara global. Terkadang user pasti mau search spesifik di dalam suatu folder yang dia buka saja. Jadi tolong buatkan sistem pencarian spesifik bro.
+- sistem pencarian kita cukup pencarian spesifik aja bro. Jika user ingin pencarian global, user tinggal pindah ke root lalu mulai search disitu.
+- sepertinya di tabel transaksis, kita gak butuh kolom id_item & jumlah produksi, kita bisa mention id_item/id_folder serta jumlah item yang terpengaruh dalam text di kolom catatan, misal formatnya "(id_user) memindahkan (id_item) dari (id_folder) ke (id_folder)". dan misal format bulk "(id_user) update stok (jumlah item yang terpengaruh) item menjadi (kalau bertambah 7, berarti '+7'. Jika berkurang 5, berarti '-5') di folder (id_folder)". Kolom catatan memang menyimpan id, tapi pas ditampilkan ke UI, pastikan yang ditampilkan adalah nama dari pemilik id itu. untuk format bulk, semisal user update 900k data, itu lebih baik kita catat 900k id item itu di catatan, atau kita cukup sebut jumlah item target yaitu 900k sehingga id item tidak perlu kita simpan, atau seperti sortly kita pecah catatan 900k item itu sehingga mereka punya id catatan masing-masing. Tapi menurut loe gagasan gue bagus gak?
+
+13. Atribut item: id, nama, sku, satuan, stok, stok min, harga jual, harga beli, pemasok(mau dibuang), note, materials, folder_id, tags, custom field(mau dibuang), image link.
+
+14. FK item_id di tabel transaksi apakah sebaiknya dibuang atau tidak, karena item_id cukup penting untuk memperkuat relasi database, walapun bisa di mention di kolom catatanyang tidak sekuat foreign key, namun jika ada force change di item, yang di transaksi juga ikut andil karena FK. Gue juga kepikiran untuk memasukkan FK folder_id nullable, jika user pindahin data, berarti ada 2 id folder untuk lokasi awal dan tujuan, paling simpan id_folder lokasi awal saja di kolom id_folder
+
+15. bro, ini aplikasi ims laravel gue. loe perhatikan kolom materials di tabel items. kalau NULL, berarti item tersebut bukan BOM, jika berisi array dengan format misal [{"item_id":71143,"qty":1},{"item_id":62402,"qty":5},{"item_id":25683,"qty":2}], maka itu adalah BOM. 50k data pertama adalah data hasil import. Gue coba create data sendiri dengan nama ayam tanpa gue assign material apapun yang berarti seharusnya kolom materialsnya adalah NULL. Nah, di dalam database, isi kolom ayam adalah "[]", ini menyebabkan beberapa fungsi error, karena kalau dia BOM, pengisiannya harus sesuai format seperti pada data hasil import [{"item_id":71143,"qty":1},{"item_id":62402,"qty":5},{"item_id":25683,"qty":2}]. Gue ingin loe perbaiki fungsi create gue agar ketika gue create item, dan gue gak aktifin slider untuk isi material BOM, berarti isi materials data tersebut adalah NULL. 
+
+16. - pada tabel folders, ada kolom items_count yang berfungsi untuk menghitung jumlah item yang ada dalam suatu folder. ketika sukses melakukan import, kolom items_count dari data folder hasil import A itu akan berisi jumlah data pada folder tersebut, misal 500k maka items_count akan berisi 500000. Ketika user lanjut create item baru di dalam folder A, maka items_count nya akan jadi 500001. ketika user lanjut memindahkan 2 item dari folder A ke folder Z yang sudah punya 8 item, maka items_count folder A = 499999 dan items_count folder Z = 10. Ketika user lanjut menghapus 3 item folder A, maka items_count = 499996 Tapi sekarang beberapa fungsi itu gak berfungsi, setelah import, items_count gak pernah berisi, gue tes move item, itemnya gak pindah folder, padahal di transaksi ada catatan pindahnya. Ini contoh pindah folder di DB (1) memindahkan (2066062) dari [150k_true_BOM] ke [50k_true(2)]. untuk user dan item udah benar pakai ID, tinggal folder yang harusnya pakai id juga. Terus untuk transaksi, sepertinya tinggal viewnya yang diperbaiki. tolong perbaiki bro.
+
+Ini konsep transaksi yang mau gue rancang:
+
+sekarang Transaksi seharusnya bisa record:
+- Import items
+- Moving items
+- CRUD activity
+
+di kolom catatan tabel transaksis, kita bisa mention id_item/id_folder, id_user, serta jumlah item yang terpengaruh dalam text di kolom catatan, misal formatnya "(id_user) memindahkan (id_item) dari (id_folder) ke (id_folder)". dan misal format bulk "(id_user) update stok (jumlah item yang terpengaruh) item menjadi (kalau bertambah 7, berarti '+7'. Jika berkurang 5, berarti '-5') di folder (id_folder)". Kolom catatan memang menyimpan id, tapi pas ditampilkan ke UI, pastikan yang ditampilkan adalah nama dari pemilik id itu. untuk format bulk, semisal user update 900k data, kita cukup sebut jumlah item target yaitu 900k sehingga 900k id item tidak perlu kita simpan
+
+- FK item_id cukup penting untuk memperkuat relasi database, walapun bisa di mention di kolom catatanyang tidak sekuat foreign key, namun jika ada force change di item, yang di transaksi juga ikut andil karena FK. Gue juga kepikiran untuk memasukkan FK folder_id nullable, jika user pindahin data, berarti ada 2 id folder untuk lokasi awal dan tujuan, paling simpan id folder lokasi awal saja di kolom folder id
+
+- fk item id dipakai hanya untuk mencatat transaksi 1 item, jika transaksi sudah melibatkan 2 item keatas, maka fk item id = null
+
+17. VARIAN digunakan agar user bisa membuat macam-macam varian secara cepat. misal kacang, user bisa tambah varian ukuran: s(small), m, l. Lalu user bisa tambah dimensi warna: black, yellow. hasilnya, 6 item dengan atribut dan BOM yang sama yaitu kacang - s, black; kacang - s, yellow; kacang - m, black; dll

@@ -1,0 +1,92 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class Item extends Model
+{
+    use HasFactory, SoftDeletes;
+
+    protected $fillable = [
+        'nama', 'sku', 'satuan', 'stok_saat_ini', 'stok_minimum',
+        'harga_jual', 'harga_beli', 'pemasok', 'note', 'tags', 'custom_fields',
+        'image_link', 'materials', 'folder_id'
+    ];
+
+    protected $casts = [
+        'tags' => 'array',
+        'custom_fields' => 'array',
+        'materials' => 'array',
+        'stok_saat_ini' => 'float',
+        'stok_minimum' => 'float',
+        'harga_jual' => 'integer',
+        'harga_beli' => 'integer',
+    ];
+
+    protected $appends = ['calculated_stock', 'is_bom'];
+
+    // --- ACCESSORS ---
+
+    /**
+     * [DITIMPA] Cek apakah item adalah BOM.
+     * Menggunakan count() karena jika materials berisi [] (array kosong), dia bukan BOM.
+     */
+    public function getIsBomAttribute(): bool {
+        return is_array($this->materials) && count($this->materials) > 0;
+    }
+
+    public function getCalculatedStockAttribute(): float {
+        if (!$this->is_bom) return (float) $this->stok_saat_ini;
+
+        $minCapacity = INF;
+        foreach ($this->materials as $mat) {
+            $mItem = self::find($mat['item_id']);
+            if (!$mItem || $mat['qty'] <= 0) continue;
+            $cap = floor($mItem->stok_saat_ini / $mat['qty']);
+            if ($cap < $minCapacity) $minCapacity = $cap;
+        }
+        return $minCapacity === INF ? 0.0 : (float) $minCapacity;
+    }
+
+    // --- RELATIONS ---
+
+    /**
+     * Sekarang folder_id merujuk ke tabel folders, bukan ke diri sendiri.
+     */
+    public function folder()
+    {
+        return $this->belongsTo(Folder::class, 'folder_id');
+    }
+
+    public function transaksis()
+    {
+        return $this->hasMany(Transaksi::class, 'item_id');
+    }
+
+    protected static function booted()
+    {
+        static::created(function ($item) {
+            if ($item->folder_id) {
+                \App\Models\Folder::where('id', $item->folder_id)->increment('items_count');
+            }
+        });
+
+        static::deleted(function ($item) {
+            if ($item->folder_id) {
+                \App\Models\Folder::where('id', $item->folder_id)
+                    ->where('items_count', '>', 0)
+                    ->decrement('items_count');
+            }
+        });
+
+        static::restored(function ($item) {
+            if ($item->folder_id) {
+                \App\Models\Folder::where('id', $item->folder_id)->increment('items_count');
+            }
+        });
+    }
+
+}
