@@ -1,0 +1,10 @@
+/vendor
+/node_modules
+/public/storage
+/API
+/NOTE
+*.sqlite
+.env
+.git
+├───API/
+└───NOTE/
