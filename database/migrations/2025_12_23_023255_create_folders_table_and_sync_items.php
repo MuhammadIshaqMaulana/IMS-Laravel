@@ -10,7 +10,7 @@ return new class extends Migration
     public function up(): void
     {
         // Matikan Foreign Key Check agar proses pembersihan lancar
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        Schema::disableForeignKeyConstraints();
 
         // 1. Buat tabel folders murni
         Schema::create('folders', function (Blueprint $table) {
@@ -93,16 +93,16 @@ return new class extends Migration
         });
 
         // Aktifkan kembali Foreign Key Check
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        Schema::enableForeignKeyConstraints();
     }
 
     public function down(): void
     {
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        Schema::disableForeignKeyConstraints();
         Schema::table('items', function (Blueprint $table) {
             $table->dropForeign(['folder_id']);
         });
         Schema::dropIfExists('folders');
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        Schema::enableForeignKeyConstraints();
     }
 };

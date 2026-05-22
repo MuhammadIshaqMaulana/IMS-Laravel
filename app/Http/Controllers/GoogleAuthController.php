@@ -30,43 +30,27 @@ class GoogleAuthController extends Controller
             $googleUser = Socialite::driver('google')->user();
             $userEmail = $googleUser->getEmail();
 
-            // Ambil daftar email admin dari .env dan bersihkan dari spasi (Untuk cek awal)
-            $adminEmailsFromEnv = array_map('trim', explode(',', env('ADMIN_EMAILS', '')));
-
             // 1. Cari user berdasarkan google_id atau email
             $user = User::where('google_id', $googleUser->getId())
                         ->orWhere('email', $userEmail)
                         ->first();
 
-            // LOGIKA OTORISASI DAN PENDAFTARAN
+            // LOGIKA OTORISASI (OPEN ACCESS UNTUK DEVELOPMENT)
             if (!$user) {
-                // KASUS 1: USER BARU. Cek apakah user ada di daftar ADMIN_EMAILS di .env
-                $isNewAdmin = in_array($userEmail, $adminEmailsFromEnv);
-
-                if (!$isNewAdmin) {
-                    // Jika user baru tidak ada di daftar .env, TOLAK LOGIN.
-                    return redirect()->route('home')->with('error', 'Akses ditolak. Email Anda tidak terdaftar sebagai admin IMS.');
-                }
-
-                // Buat user baru dan set sebagai admin
+                // Buat user baru dan set sebagai admin (Siapapun yang login jadi admin)
                 $user = User::create([
                     'name' => $googleUser->getName(),
                     'email' => $userEmail,
                     'google_id' => $googleUser->getId(),
                     'password' => Hash::make(Str::random(16)), // Password acak
-                    'is_admin' => true, // SET PERAN ADMIN DI SINI
+                    'is_admin' => true, // SET PERAN ADMIN
                 ]);
             } else {
-                // KASUS 2: USER LAMA. Update detail jika diperlukan.
+                // Pastikan user lama tetap admin jika ada perubahan status manual sebelumnya
                 $user->update([
                     'google_id' => $googleUser->getId(),
-                    // Status is_admin tidak diubah karena sudah diatur di login pertama
+                    'is_admin' => true, 
                 ]);
-
-                // Pengecekan keamanan tambahan: pastikan user lama adalah admin
-                if (!$user->is_admin) {
-                     return redirect()->route('home')->with('error', 'Akses ditolak. Akun Anda bukan admin IMS.');
-                }
             }
 
             // 3. Login pengguna
@@ -74,7 +58,7 @@ class GoogleAuthController extends Controller
 
             // Redirect ke Dashboard setelah login sukses
             return redirect()->route('dashboard')
-                             ->with('success', 'Selamat datang Admin, Anda berhasil login via Google.');
+                             ->with('success', 'Selamat datang, Anda berhasil login via Google.');
 
         } catch (\Exception $e) {
             Log::error("Google Auth Error: " . $e->getMessage());

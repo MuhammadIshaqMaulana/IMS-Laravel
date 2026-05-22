@@ -1,8 +1,17 @@
 *.log
 .DS_Store
 .env
+.env.*
 .env.backup
 .env.production
+.env.old
+*.txt
+*.png
+*.jpg
+*.jpeg
+*.gif
+/NOTE
+/API/900rb Dummy data
 .phpactor.json
 .phpunit.result.cache
 /.fleet

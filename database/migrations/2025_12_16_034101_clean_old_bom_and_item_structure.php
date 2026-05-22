@@ -14,9 +14,13 @@ return new class extends Migration
     {
         // 1. HAPUS TABEL daftar_bahans
         // Kita harus menonaktifkan Foreign Key Check karena ada potensi FK lain yang terikat.
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-        Schema::dropIfExists('daftar_bahans');
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        Schema::disableForeignKeyConstraints();
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('DROP TABLE IF EXISTS daftar_bahans CASCADE;');
+        } else {
+            Schema::dropIfExists('daftar_bahans');
+        }
+        Schema::enableForeignKeyConstraints();
 
         // 2. HAPUS KOLOM jenis_item dari items
         Schema::table('items', function (Blueprint $table) {

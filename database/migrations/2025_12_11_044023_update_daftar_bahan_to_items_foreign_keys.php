@@ -12,34 +12,24 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('daftar_bahans', function (Blueprint $table) {
-
-            // 1. HAPUS FOREIGN KEY LAMA SECARA KONDISIONAL
-            // Laravel 10/11 tidak menyediakan helper yang baik untuk cek FK exist.
-            // Kita coba drop dengan nama standar, tetapi kita tambahkan pengecekan eksistensi di PHP/SQL.
-
-            // Produk Jadi (sebelumnya menunjuk ke produk_jadis)
-            try {
-                // Mencoba menghapus Foreign Key standar yang terasosiasi dengan kolom produk_jadi_id
-                $table->dropForeign(['produk_jadi_id']);
-            } catch (\Exception $e) {
-                // Jika error 1091 (FK not found), kita abaikan dan lanjutkan.
-                // Jika error bukan 1091, akan dilempar ulang.
-                if (strpos($e->getMessage(), '1091') === false) {
-                    throw $e;
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('ALTER TABLE daftar_bahans DROP CONSTRAINT IF EXISTS daftar_bahans_produk_jadi_id_foreign');
+            DB::statement('ALTER TABLE daftar_bahans DROP CONSTRAINT IF EXISTS daftar_bahans_bahan_mentah_id_foreign');
+        } else {
+            Schema::table('daftar_bahans', function (Blueprint $table) {
+                try {
+                    $table->dropForeign(['produk_jadi_id']);
+                } catch (\Exception $e) {
+                    if (strpos($e->getMessage(), '1091') === false) throw $e;
                 }
-            }
 
-            // Bahan Mentah (sebelumnya menunjuk ke bahan_mentahs)
-            try {
-                 // Mencoba menghapus Foreign Key standar yang terasosiasi dengan kolom bahan_mentah_id
-                $table->dropForeign(['bahan_mentah_id']);
-            } catch (\Exception $e) {
-                 if (strpos($e->getMessage(), '1091') === false) {
-                    throw $e;
+                try {
+                    $table->dropForeign(['bahan_mentah_id']);
+                } catch (\Exception $e) {
+                    if (strpos($e->getMessage(), '1091') === false) throw $e;
                 }
-            }
-        });
+            });
+        }
 
         // --- BLOK KEDUA: RENAME KOLOM ---
 

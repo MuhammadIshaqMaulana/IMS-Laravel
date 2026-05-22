@@ -11,11 +11,19 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('ALTER TABLE transaksis DROP CONSTRAINT IF EXISTS transaksis_produk_jadi_id_foreign');
+        } else {
+            Schema::table('transaksis', function (Blueprint $table) {
+                try {
+                    $table->dropForeign(['produk_jadi_id']);
+                } catch (\Exception $e) {
+                    if (strpos($e->getMessage(), '1091') === false) throw $e;
+                }
+            });
+        }
+
         Schema::table('transaksis', function (Blueprint $table) {
-
-            // 1. Hapus Foreign Key lama
-            $table->dropForeign(['produk_jadi_id']);
-
             // 2. Ubah nama kolom lama
             $table->renameColumn('produk_jadi_id', 'item_id');
         });

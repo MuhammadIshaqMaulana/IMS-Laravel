@@ -16,13 +16,18 @@ return new class extends Migration
         // yang menunjuk ke tabel ini.
 
         // START FIX: Menonaktifkan pengecekan kunci asing sementara
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        Schema::disableForeignKeyConstraints();
 
-        Schema::dropIfExists('bahan_mentahs');
-        Schema::dropIfExists('produk_jadis');
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('DROP TABLE IF EXISTS bahan_mentahs CASCADE;');
+            DB::statement('DROP TABLE IF EXISTS produk_jadis CASCADE;');
+        } else {
+            Schema::dropIfExists('bahan_mentahs');
+            Schema::dropIfExists('produk_jadis');
+        }
 
         // END FIX: Mengaktifkan kembali pengecekan kunci asing
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        Schema::enableForeignKeyConstraints();
     }
 
     /**
